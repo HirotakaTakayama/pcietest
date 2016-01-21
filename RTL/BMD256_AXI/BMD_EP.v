@@ -521,9 +521,9 @@ module BMD_EP#
             
       wire [63:0] bram_wr_data;
       wire bram_wea;
-      wire [9:0] bram_wr_addr;
+      wire [13:0] bram_wr_addr;
       wire bram_reb;
-      wire [9:0] bram_rd_addr;
+      wire [13:0] bram_rd_addr;
       wire [63:0] bram_rd_data;
 
       wire [31:0] vio_settings_sender_address_for_sender;
@@ -602,7 +602,9 @@ module BMD_EP#
 			   .latency_data_en( latency_data_en ), //O
 			   .bram_rd_data( bram_rd_data ), //I //64bit //come from check_latency
 			   .bram_reb( bram_reb ), //O
-			   .bram_rd_addr( bram_rd_addr[9:0] ),//O
+			   .bram_rd_addr( bram_rd_addr[13:0] ),//O
+
+			   .Tlp_stop_interrupt( Tlp_stop_interrupt ), //I
 			   .vio_settings_sender_address_for_sender( vio_settings_sender_address_for_sender[31:0] ) //I
 			   );
 
@@ -752,8 +754,9 @@ module BMD_EP#
 			   .latency_counter( latency_counter[63:0] ), //O //64bit //send to RX_ENGINE. これは絶対時刻
 			   .bram_wr_data( bram_wr_data ), //O //64bit //send to check_latency. これはある�?ータの送信時�?�時刻
 			   .bram_wea( bram_wea ), //O
-			   .bram_wr_addr( bram_wr_addr[9:0] ), //O //10bit
+			   .bram_wr_addr( bram_wr_addr[13:0] ), //O //12bit
 
+			   .Tlp_stop_interrupt( Tlp_stop_interrupt ), //O
 			   .vio_settings_sender_address_for_sender( vio_settings_sender_address_for_sender[31:0] ), //O
 
 			   //debug signal
@@ -819,12 +822,12 @@ module BMD_EP#
 
 		//write domain, comes from TX_ENGINE
 		.bram_wea( bram_wea ),
-		.bram_wr_addr( bram_wr_addr[9:0] ),
+		.bram_wr_addr( bram_wr_addr[13:0] ),
 		.bram_wr_data( bram_wr_data[63:0] ),
 
 		//read domain, comes from RX_ENGINE
 		.bram_reb( bram_reb ),
-		.bram_rd_addr( bram_rd_addr[9:0] ),
+		.bram_rd_addr( bram_rd_addr[13:0] ),
 		//read domain send to RX_ENGINE
 		.bram_rd_data( bram_rd_data[63:0] ) //O
 	);

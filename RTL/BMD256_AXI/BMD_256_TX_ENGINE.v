@@ -149,6 +149,7 @@ module BMD_TX_ENGINE (
               bram_wr_addr,
 
               vio_settings_sender_address_for_sender,
+              Tlp_stop_interrupt,
 
               //debug signal
               m_axis_rc_tlast_i,
@@ -156,14 +157,16 @@ module BMD_TX_ENGINE (
               m_axis_rc_tvalid_i
                       );
 
+		localparam BRAM_ADDRESS_MAX = 14'd16383;
+
       input latency_reset_signal;
       output reg [63:0] latency_counter;
       output reg [63:0] bram_wr_data;
       output reg bram_wea;
-      output reg [9:0] bram_wr_addr;
+      output reg [13:0] bram_wr_addr;
       input latency_data_en;
       output wire [31:0] vio_settings_sender_address_for_sender;
-
+      output reg Tlp_stop_interrupt;
 
       input               clk;
       input               rst_n;
@@ -351,30 +354,13 @@ module BMD_TX_ENGINE (
 
 
       // Local wires
-      
       wire [15:0]   cur_mrd_count_o = cur_rd_count;
       // CN ADDED FOR CS
       wire [23:0]       cur_wr_count_o = cur_wr_count; 
-      
+
       wire                cfg_bm_en = 1'b1;
       wire [31:0]         mwr_addr  = mwr_addr_i;
       wire [31:0]         mrd_addr  = mrd_addr_i;
-      wire [31:0]         mwr_data_i_sw = {mwr_data_i[07:00],
-                                           mwr_data_i[15:08],
-                                           mwr_data_i[23:16],
-                                           mwr_data_i[31:24]};
-
-      wire  [2:0]         mwr_func_num = (!mwr_phant_func_dis1_i && cfg_phant_func_en_i) ? 
-                          ((cfg_phant_func_supported_i == 2'b00) ? 3'b000 : 
-                           (cfg_phant_func_supported_i == 2'b01) ? {cur_wr_count[8], 2'b00} : 
-                           (cfg_phant_func_supported_i == 2'b10) ? {cur_wr_count[9:8], 1'b0} : 
-                           (cfg_phant_func_supported_i == 2'b11) ? {cur_wr_count[10:8]} : 3'b000) : 3'b000;
-
-      wire  [2:0]         mrd_func_num = (!mrd_phant_func_dis1_i && cfg_phant_func_en_i) ? 
-                          ((cfg_phant_func_supported_i == 2'b00) ? 3'b000 : 
-                           (cfg_phant_func_supported_i == 2'b01) ? {cur_rd_count[8], 2'b00} : 
-                           (cfg_phant_func_supported_i == 2'b10) ? {cur_rd_count[9:8], 1'b0} : 
-                           (cfg_phant_func_supported_i == 2'b11) ? {cur_rd_count[10:8]} : 3'b000) : 3'b000;
 
 
         //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
@@ -425,7 +411,6 @@ module BMD_TX_ENGINE (
        */
 
       always @ (rd_be_o) begin
-
         casex (rd_be_o[3:0])
           4'b1xx1 : byte_count = 13'h004;
           4'b01x1 : byte_count = 13'h003;
@@ -438,9 +423,7 @@ module BMD_TX_ENGINE (
           4'b0100 : byte_count = 13'h001;
           4'b1000 : byte_count = 13'h001;
           4'b0000 : byte_count = 13'h001;
-
         endcase // casex (rd_be_o[3:0])
-
       end
 
       /*
@@ -448,17 +431,13 @@ module BMD_TX_ENGINE (
        */
 
       always @ (rd_be_o or req_addr_i) begin
-
         casex (rd_be_o[3:0])
-          
           4'b0000 : lower_addr = {req_addr_i[4:0], 2'b00};
           4'bxxx1 : lower_addr = {req_addr_i[4:0], 2'b00};
           4'bxx10 : lower_addr = {req_addr_i[4:0], 2'b01};
           4'bx100 : lower_addr = {req_addr_i[4:0], 2'b10};
           4'b1000 : lower_addr = {req_addr_i[4:0], 2'b11};
-
         endcase // casex (rd_be_o[3:0])
-
       end
 
       always @ ( posedge clk ) begin
@@ -611,9 +590,13 @@ module BMD_TX_ENGINE (
 
       reg start_wr_test_edge, start_rd_test_edge;
       reg tag_offset;
+      reg [7:0] tag_num;
       reg [9:0] incr_data_counter;
 
-      reg [9:0] echo_tlp_num;
+      reg [13:0] echo_tlp_num;
+      wire vio_latency_count_continue;
+      wire vio_echo_mode;
+      
       //
       always @ ( posedge clk ) begin
         if (!rst_n ) begin
@@ -652,16 +635,22 @@ module BMD_TX_ENGINE (
             incr_data_counter <= 10'd0;
 
             //bram 
-            bram_wr_addr <= 10'd0;
+            bram_wr_addr <= 14'd0;
             bram_wea <= 1'b0;
 
-            echo_tlp_num <= 10'd0;
+            echo_tlp_num <= 14'd0;
+            tag_num <= 8'd0;
+            Tlp_stop_interrupt <= 1'b0;
         end
         else begin // if (!rst_n )
           //user reset
           if( latency_reset_signal ) begin
             incr_data_counter <= 10'd0;
-            echo_tlp_num <= 10'd0;
+            echo_tlp_num <= 14'd0;
+            bram_wr_addr <= 14'd0;
+            bram_wea <= 1'b1; //これは1にしてresetを行う
+            Tlp_stop_interrupt <= 1'b0;
+            cur_wr_count <= 24'd0; //tag
           end
 
           //受信側FPGAから送るパケット数をカウント, 受信側FPGAのみで動作
@@ -670,16 +659,17 @@ module BMD_TX_ENGINE (
           end
           bram_wea <= 1'b0;
 
-          if (fifo_read_en)
+
+          if ( fifo_read_en )
             fifo_read_count <= fifo_read_count - 10'd1;
           
-          if (fifo_read_en && fifo_read_count == 10'd1)
+          if ( fifo_read_en && fifo_read_count == 10'd1 )
             fifo_reading <= 1'b0;
 
-          if (cpld_receive_i)
+          if ( cpld_receive_i )
             request_count <= request_count - 4'd1;
           
-          if (init_rst_i ) begin
+          if ( init_rst_i ) begin
             
             s_axis_rq_tdata         <= 256'b0;
             s_axis_rq_tkeep         <= 8'b0;
@@ -747,10 +737,11 @@ module BMD_TX_ENGINE (
           //vio_settings_sender_address_for_sender: 送信側FPGAにとっての送信側FPGAのアドレス番地設定．複数のFPGAを使っていても同じ設定となる．
           //receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0], 送信側FPGAがfffffffだとしたら，どのFPGAでもvio_settings_sender_address_for_senderをfffffffとする．
           if( s_axis_rq_tready[0] && 
+          	!Tlp_stop_interrupt &&
               ( test_sender_start_vio || 
-                ( |echo_tlp_num[9:0] && FPGA_RECEIVER_SIDE ) ) ) begin //receiver FPGAからのechoあり
+                ( |echo_tlp_num[13:0] && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //receiver FPGAからのechoあり
 //            if( s_axis_rq_tready[0] && test_sender_start_vio ) begin //receuver FPGAからのechoなし
-                  
+
                   cur_wr_count <= cur_wr_count + 1'b1;
 
                   s_axis_rq_tvalid  <= 1'b1;
@@ -760,13 +751,14 @@ module BMD_TX_ENGINE (
 
 				//tagの設定を変えて，送信側と受信側でタグ番号が被らないようにする．　こうすれば詰まらないと想定した //bram domain
                 if( FPGA_RECEIVER_SIDE ) begin
-                	tag_offset = 1'b0;
-                	echo_tlp_num <= echo_tlp_num - 10'd1; //減算
+                	tag_offset <= 1'b0;
+                	echo_tlp_num <= echo_tlp_num - 1'b1; //減算
                	end
                 else begin //receiver_FPGA
-                	tag_offset = 1'b1;
+                	tag_offset <= 1'b1;
                 end
-                  
+                
+                tag_num = { cur_wr_count[6:0], tag_offset }; //tagの値
                    
                   //Requester Requestからデータを発行するためのヘッダ, ここの指定を変えればFPGAからのアクセスになるはず。後々はこれを残しつつFPGAからのアクセスも送れるようにする                  
                           s_axis_rq_tdata   <= {128'b0, // padding 
@@ -775,8 +767,8 @@ module BMD_TX_ENGINE (
                                             3'd0, // Transaction Class //3bit
                                             1'b0, // Disable requester ID
                                             16'd0, // completer ID (not use)
-//                                              cur_wr_count[7:0], // tag
-                            { 3'd0, tag_offset, cur_wr_count[3:0] }, // tag
+                                            tag_num[7:0], // tag　拡張タグ空間
+//                           { 3'd0, tag_offset, cur_wr_count[3:0] }, // tag 標準タグ空間
                                             16'd0, // requester ID (not use)
                                             1'd0, // Posioned completion
                                             4'b0001, // Req type (memory write)
@@ -830,32 +822,51 @@ module BMD_TX_ENGINE (
                   s_axis_rq_tdata   <= { 246'd0, incr_data_counter }; //temp
 
                           s_axis_rq_tkeep   <= 8'hFF; //all of the data are enabled.
-                  cur_mwr_dw_count <= cur_mwr_dw_count - 4'h8; //decrement 256bit(8DW)
+                  			cur_mwr_dw_count <= cur_mwr_dw_count - 4'h8; //decrement 256bit(8DW)
 
 
                           //残り8DWなら次は終了.assert rq_tlast.上の式と同タイミングで処理されるので、8DWのデータであればすぐにこの式が評価される
                         if ( cur_mwr_dw_count == 4'h8 ) begin
                         	s_axis_rq_tlast   <= 1'b1; //transaction 終了信号
                     		mem_writing <= 1'b0; //これで再びheader送信可能に
-                    		fifo_reading <= 1'b0; //FIFOから受信終了                  
+                    		fifo_reading <= 1'b0; //FIFOから受信終了
                             
                 			bram_wea <= 1'b1; //BRAMに入れる
 
 		//                  if ( cur_wr_count == rmwr_count )  begin //rmwr_countはヘッダの送られる最大回数.
-                    		if ( cur_wr_count[3:0] == 4'b1111 )  begin //tag reset
-                      			cur_wr_count <= 24'd0; 
+                    		if ( cur_wr_count[6:0] == 7'b111_1111 ) begin //tag reset 7bitで判断．8bit目はFPGAごとに異なる
+                      			cur_wr_count <= 24'd0;
                       			// mwr_done_o   <= 1'b1; //これを使うとこの後からヘッダ送れなくなる.
                     		end
 
-                    		//LATENCY評価用.  送信data
+                    		//送信data用
                     		if( incr_data_counter == 10'd1023 ) begin
                      			incr_data_counter <= 10'd0;
-                      			bram_wr_addr <= 10'd0;
                     		end
-                    		else if( incr_data_counter != 10'd1023 ) begin
+                    		if( incr_data_counter != 10'd1023 ) begin
                       			incr_data_counter <= incr_data_counter + 1'b1; //data incr
-                      			bram_wr_addr <= bram_wr_addr + 1'b1;
                     		end
+
+                    		//LATENCY評価用.
+                    		if( vio_latency_count_continue ) begin //BRAMに書き続けてチェックするver
+   								if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
+   									bram_wr_addr <= 14'd0;
+   								end
+   								else begin
+   									bram_wr_addr <= bram_wr_addr + 1'b1;
+   								end
+   							end
+   							if( !vio_latency_count_continue ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
+   								if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
+   									bram_wr_addr <= BRAM_ADDRESS_MAX;
+   									bram_wea <= 1'b0;
+   									Tlp_stop_interrupt <= 1'b1;
+   								end
+   								else begin
+   									bram_wr_addr <= bram_wr_addr + 1'b1;
+   								end
+   							end
+
                   		end
                   		//まだDWが残っていればtlastはassertされない
                   		else begin
@@ -879,7 +890,7 @@ module BMD_TX_ENGINE (
 
       /***************************/
       /*packet send start edge signal*/
-      /***************************/      
+      /***************************/
       reg wr_test_perm_1;
       reg rd_test_perm_1;
       wire requester_wr_start_signal, requester_rd_start_signal;
@@ -909,10 +920,10 @@ module BMD_TX_ENGINE (
         if( init_rst_i ) begin
           start_rd_test_edge <= 1'b0;
           start_rd_test_edge_d1 <= 1'b0;
-          rd_test_perm_1 <= 1'b0;         
+          rd_test_perm_1 <= 1'b0;
         end
         else begin
-          if( requester_rd_start_signal && !rd_test_perm_1  ) begin
+          if( requester_rd_start_signal && !rd_test_perm_1 ) begin
             start_rd_test_edge <= 1'b1;
             rd_test_perm_1 <= 1'b1;
           end
@@ -931,30 +942,25 @@ module BMD_TX_ENGINE (
 
 
 
-      /***************************/
-      /***************************/
-      //About Latency check 
-      /***************************/
-      /***************************/
-
-      /***************************/
-      // for latency check, TLP送信を開始した時点からの時間を計測．64bitなので，1分ぐらいで使えなくなる．
-      /***************************/
-      always @ ( posedge clk ) begin
-        if (!rst_n ) begin
-          bram_wr_data <= 64'd0;
-          latency_counter <= 64'd0;
+      /*********************************************************************************/
+      /*********************************************************************************/
+      //Latency check
+      /*********************************************************************************/
+      // for latency check, TLP送信を開始した時点からの時間を計測．
+    always @ ( posedge clk ) begin
+    	if (!rst_n ) begin
+        	bram_wr_data <= 64'd0;
+        	latency_counter <= 64'd0;
         end
         else if( latency_reset_signal ) begin
-          bram_wr_data <= 64'd0;
-          latency_counter <= 64'd0;
+        	bram_wr_data <= 64'd0;
+        	latency_counter <= 64'd0;
         end
-        else begin
-          if( test_sender_start_vio && latency_data_en ) //TLP送信かつ，latency測定開始時にカウント開始
+        else if( test_sender_start_vio ) begin //TLP送信かつ，latency測定開始時にカウント開始
             bram_wr_data <= bram_wr_data + 1'b1;
             latency_counter <= latency_counter + 1'b1;
         end
-      end
+    end
 
 
 
@@ -978,85 +984,15 @@ module BMD_TX_ENGINE (
      );
 
 
-      wire fifo_read_en_vio = fifo_read_en;
-      wire s_axis_rq_tready_vio = s_axis_rq_tready[0];
 
-      /*
-      //ila check TX data info
-      ila_check_TX_ENGINE ila_check_TX_ENGINE_status
-    (
-     .clk( clk ),
-     .probe0( fifo_read_en_vio ), //1bit //now, not use (12/15/2014)
-     .probe1( fifo_prog_empty ), //1bit
-     .probe2( s_axis_rq_tready_vio ), //1bit
-     .probe3( mwr_len_i ), //32bit //これでpacket_numがどういう状態になっているかが見れる
-     .probe4( cur_mwr_dw_count ), //10bit
-     .probe5( s_axis_rq_tlast ), //1bit
-     .probe6( s_axis_rq_tdata ), //256bit
-     .probe7( s_axis_rq_tvalid ), //1bit
-     .probe8( fifo_sender_data_prepare_ok ) //1bit //now, not use (12/15/2014)
-     );
-       */
-
-
-
-      //latency check of 1DW by vio
-      reg [31:0] latency_count;
-      reg [31:0] latency_half_count;
-      wire temp_vio_wire;
-     /*
-      vio_32bit1in_1bit1out vio_check_latency
-    (
-     .clk( clk ),
-     .probe_in0( latency_count ), //32bit
-     .probe_out0( temp_vio_wire ) //1bit
-     );
-*/
-
-
-    //レイテンシチェック専用．　送信側FPGAの番地設定と，echo側でのデータたまりチェック
+    //レイテンシチェック 送信側FPGAの番地設定と，echo側でのデータたまりチェック
 	vio_sender_fpga_address vio_sender_fpga_address
     (
      .clk( clk ),
-     .probe_in0( echo_tlp_num ), //10bit
-     .probe_out0( vio_settings_sender_address_for_sender[31:0] ) //32bit //address of sender side fpga BAR1.
+     .probe_in0( echo_tlp_num[13:0] ), //14bit
+     .probe_out0( vio_settings_sender_address_for_sender[31:0] ), //32bit //address of sender side fpga BAR1.
+     .probe_out1( vio_latency_count_continue ), //1bit //レイテンシチェックを継続して行うか，ちょっとの間だけ行うかを決める.0:継続しない．1:継続してBRAMへ書き込み
+     .probe_out2( vio_echo_mode ) //1bit //レイテンシを測るか（受信側FPGAからechoを返すか）どうかを決める.0:echoなし（スループットチェック用）.1:echoあり（レイテンシチェック用）
      );
 
-
-
-      /***************************/
-      //system communication time check
-      /***************************/
-      reg latency_cnt_assert;      
-      always @( posedge clk ) begin
-        if( init_rst_i ) begin
-          latency_cnt_assert <= 1'b0;
-          latency_count <= 32'd0;
-        end
-        else begin
-          //before packet start. initialize.
-          if( start_rd_test_edge ) begin
-            latency_count <= 32'd0;
-          end
-          
-          //requester request packet start
-          else if( start_rd_test_edge_d1 ) begin 
-            latency_cnt_assert <= 1'b1;
-            latency_count <= latency_count + 1'b1;
-          end
-          //requester completion packet arrived
-          else if( cpld_receive_i ) begin //これはrdでなら返ってくる
-            latency_cnt_assert <= 1'b0;
-          end
-          //clk count increment
-          else if( latency_cnt_assert ) begin
-            latency_count <= latency_count + 1'b1;
-          end
-        end
-      end      
-
-
-
-
 endmodule // BMD_TX_ENGINE
-
