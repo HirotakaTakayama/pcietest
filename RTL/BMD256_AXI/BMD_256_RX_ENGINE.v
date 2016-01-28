@@ -783,8 +783,8 @@ module BMD_RX_ENGINE (
 					bram_reb <= 1'b1;
 		  		end
 
-		  		//rd_enの次のclkでaddressをincr
-		  		else if( bram_reb ) begin
+		  		//rd_enの次のclkでaddressをincr. cq_sopが立つかに依らずアドレス加算はする（else ifとしない）
+		  		if( bram_reb ) begin
 					//bram operation
 					if( bram_rd_addr == BRAM_ADDRESS_MAX ) begin
 			      		bram_rd_addr <= 14'd0;
