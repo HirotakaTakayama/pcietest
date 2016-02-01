@@ -28,22 +28,22 @@ module BMD_TX_ENGINE (
                       input clk, //it's a user_clk(250MHz).
                       input rst_n, //!user_reset
 		      
-		      output         s_axis_rq_tlast, //O
-		      output [255:0] s_axis_rq_tdata, //O
-		      output [59:0]  s_axis_rq_tuser, //O
-		      output [7:0]   s_axis_rq_tkeep, //O
-		      input [3:0]    s_axis_rq_tready, //input from IP. 4bit
-		      output         s_axis_rq_tvalid, //O
+		      output reg         s_axis_rq_tlast, //O
+		      output reg [255:0] s_axis_rq_tdata, //O
+		      output [59:0]      s_axis_rq_tuser, //O
+		      output reg [7:0]   s_axis_rq_tkeep, //O
+		      input [3:0]        s_axis_rq_tready, //input from IP. 4bit
+		      output reg         s_axis_rq_tvalid, //O
 
-		      output [255:0] s_axis_cc_tdata,
-		      output [32:0]  s_axis_cc_tuser,
-		      output         s_axis_cc_tlast,
-		      output [7:0]   s_axis_cc_tkeep,
-		      output         s_axis_cc_tvalid,
-		      input [3:0]    s_axis_cc_tready,		      
-
-		      input          req_compl_i,
-		      output         compl_done_o,
+		      output reg [255:0] s_axis_cc_tdata,
+		      output reg [32:0]  s_axis_cc_tuser,
+		      output reg         s_axis_cc_tlast,
+		      output reg [7:0]   s_axis_cc_tkeep,
+		      output reg         s_axis_cc_tvalid,
+		      input [3:0]        s_axis_cc_tready,
+   
+		      input              req_compl_i,
+		      output reg         compl_done_o,
 
 		      input [2:0]    req_tc_i,
 		      input          req_td_i,
@@ -73,7 +73,7 @@ module BMD_TX_ENGINE (
 		      input  [31:0]  mwr_addr_i, //RXのcq_dataによりこれにinputされるかが決まり, It is used when the rq client circuit makes transaction. It comes from BMD_EP_MEM. it decided at mem_wr_data.
 		      input  [31:0]  mwr_data_i,
 		      input  [31:0]  mwr_count_i, //It comes from BMD_EP_MEM. it decided at mem_wr_data. 
-		      output         mwr_done_o,
+		      output reg        mwr_done_o,
 		      input  [2:0]   mwr_tlp_tc_i,
 		      input          mwr_64b_en_i,
 		      input          mwr_phant_func_dis1_i,
@@ -136,49 +136,39 @@ module BMD_TX_ENGINE (
 		       */
 
 		      //受信側FPGAでのパケット転送開始信号
-		      input          Receiver_side_trans_start,
+		      input              Receiver_side_trans_start,
 
 		      //latency signal
-		      input             latency_reset_signal,
-		      input             latency_data_en,
-		      output reg [63:0] latency_counter, //send to RX_ENGINE. これは絶対時刻
+		      input              latency_reset_signal,
+		      input              latency_data_en,
+		      output reg [63:0]  latency_counter, //send to RX_ENGINE. これは絶対時刻
 
 		      //BRAM
-		      output reg [63:0] bram_wr_data, //send to check_latency. これはあるデータの送信時の時刻
-		      output reg        bram_wea,
-		      output reg [13:0] bram_wr_addr,
+		      output reg [63:0]  bram_wr_data, //send to check_latency. これはあるデータの送信時の時刻
+		      output reg         bram_wea,
+		      output reg [13:0]  bram_wr_addr,
 		      
-		      output [31:0]     vio_settings_sender_address_for_sender,
-		      output reg        Tlp_stop_interrupt,
+		      output [31:0]      vio_settings_sender_address_for_sender,
+		      output reg         Tlp_stop_interrupt,
 
 		      //debug signal
-		      input             m_axis_rc_tlast_i,
-		      input [255:0]     m_axis_rc_tdata_i,
-		      input             m_axis_rc_tvalid_i
+		      input              m_axis_rc_tlast_i,
+		      input [255:0]      m_axis_rc_tdata_i,
+		      input              m_axis_rc_tvalid_i
                       );      
 
    //localparameter
-   localparam BRAM_ADDRESS_MAX = 14'd16383;
+   localparam  BRAM_ADDRESS_MAX   = 14'd16383;
 
    //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
-   assign FPGA_RECEIVER_SIDE   = ( receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0] );
+   assign      FPGA_RECEIVER_SIDE = ( receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0] );
 
    /* Present address and byte enable to memory module */
-   assign rd_addr_o            = req_addr_i[10:2];
-   assign rd_be_o              = req_be_i[3:0];
+   assign      rd_addr_o          = req_addr_i[10:2];
+   assign      rd_be_o            = req_be_i[3:0];
 
 
-   // Local registers
-   reg         s_axis_rq_tlast;
-   reg [255:0] s_axis_rq_tdata;
-   reg [7:0]   s_axis_rq_tkeep;
-   reg         s_axis_rq_tvalid;
-   
-   reg [255:0] s_axis_cc_tdata;
-   reg [32:0]  s_axis_cc_tuser;
-   reg         s_axis_cc_tlast;
-   reg [7:0]   s_axis_cc_tkeep;
-   reg         s_axis_cc_tvalid;
+   // Local registers   
    
    reg [12:0]  byte_count;
    reg [6:0]   lower_addr;
@@ -186,10 +176,6 @@ module BMD_TX_ENGINE (
    reg         req_compl_q;                 
 
    reg [2:0]   bmd_256_tx_state;
-
-
-   reg         compl_done_o;
-   reg         mwr_done_o;
 
    reg         mrd_done;
 
@@ -219,29 +205,28 @@ module BMD_TX_ENGINE (
    //RQ tuser
    reg [3:0]   rq_first_be;
    reg [3:0]   rq_last_be;
-   wire [59:0] s_axis_rq_tuser = { 52'd0, rq_last_be, rq_first_be }; //[8]から上位は全て0fill. [8]より上位はparityなど
+   assign      s_axis_rq_tuser[59:0] = { 52'd0, rq_last_be, rq_first_be }; //[8]から上位は全て0fill. [8]より上位はparityなど
 
    //FIFO ctrl
    reg         fifo_reading;
    reg [9:0]   fifo_read_count;
    //read request to tx_side fifo
-   wire        fifo_read_en    = ( fifo_reading && s_axis_rq_tready[0] ); //rq_tready is sent from rq IP.
+   assign      fifo_read_en          = ( fifo_reading && s_axis_rq_tready[0] ); //rq_tready is sent from rq IP.
+   
+   assign      cur_mrd_count_o[15:0] = cur_rd_count;
+   // CN ADDED FOR CS
+   assign      cur_wr_count_o[23:0]  = cur_wr_count;
 
-   //
+   
    reg [3:0]   request_count;
 
    reg         cpld_waiting;
    reg         mem_writing;
 
-   // Local wires
-   wire [15:0] cur_mrd_count_o = cur_rd_count;
-   // CN ADDED FOR CS
-   wire [23:0] cur_wr_count_o  = cur_wr_count; 
-
+   // Local wires   
    wire        cfg_bm_en       = 1'b1;
    wire [31:0] mwr_addr        = mwr_addr_i;
    wire [31:0] mrd_addr        = mrd_addr_i;
-
       
 
    function [31:0] dword_data_align;

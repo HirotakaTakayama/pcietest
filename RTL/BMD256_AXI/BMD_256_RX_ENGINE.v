@@ -55,19 +55,20 @@ module BMD_RX_ENGINE (
                        * req_compl assertion and responds with compl_done
                        * assertion when a Completion w/ data is transmitted. 
                        */
-		      output             req_compl_o,
+		      output reg         req_compl_o,
 		      input              compl_done_i,
 
-                      output [10:0]      addr_o, //EP_MEM_ACCESS と256_TXにつながっているっぽい // Memory Read Address
+                      output reg [10:0]  addr_o, //EP_MEM_ACCESS と256_TXにつながっているっぽい // Memory Read Address
 
-		      output [2:0]       req_tc_o, // Memory Read TC
-		      output             req_td_o, // Memory Read TD
-		      output             req_ep_o, // Memory Read EP
-		      output [1:0]       req_attr_o, // Memory Read Attribute
-		      output [9:0]       req_len_o, // Memory Read Length
-		      output [15:0]      req_rid_o, // Memory Read Requestor ID
-		      output [7:0]       req_tag_o, // Memory Read Tag
-		      output [7:0]       req_be_o, // Memory Read Byte Enables
+
+		      output reg [2:0]   req_tc_o, // Memory Read TC
+		      output reg         req_td_o, // Memory Read TD
+		      output reg         req_ep_o, // Memory Read EP
+		      output reg [1:0]   req_attr_o, // Memory Read Attribute
+		      output reg [9:0]   req_len_o, // Memory Read Length
+		      output reg [15:0]  req_rid_o, // Memory Read Requestor ID
+		      output reg [7:0]   req_tag_o, // Memory Read Tag
+		      output reg [7:0]   req_be_o, // Memory Read Byte Enables
 
                       /* 
                        * Memory interface used to save 1 DW data received 
@@ -77,20 +78,20 @@ module BMD_RX_ENGINE (
                        * assertion and asserts wr_busy_i when it is 
                        * processing written information.
                        */
-		      output [7:0]       wr_be_o, // Memory Write Byte Enable
-		      output [31:0]      wr_data_o, //memory writeで使われる。 // Memory Write Data
-		      output             wr_en_o, // Memory Write Enable
+		      output reg [7:0]   wr_be_o, // Memory Write Byte Enable
+		      output reg [31:0]  wr_data_o, //memory writeで使われる。 // Memory Write Data
+		      output reg         wr_en_o, // Memory Write Enable
 		      input              wr_busy_i, // Memory Write Busy   
 
                       /* Completion no Data */
-		      output [7:0]       cpl_ur_found_o,
-		      output [7:0]       cpl_ur_tag_o,
+		      output reg [7:0]   cpl_ur_found_o,
+		      output reg [7:0]   cpl_ur_tag_o,
 
                       /* Completion with Data */
 		      input  [31:0]      cpld_data_i,
-		      output [31:0]      cpld_found_o,
-		      output [31:0]      cpld_data_size_o,
-		      output             cpld_malformed_o,
+		      output reg [31:0]  cpld_found_o,
+		      output reg [31:0]  cpld_data_size_o,
+		      output reg         cpld_malformed_o,
 		      output             cpld_data_err_o,
 
                       output reg         cpld_receive_o,
@@ -142,42 +143,11 @@ module BMD_RX_ENGINE (
    
 
    assign     cpld_data_err_o        = 1'd0; // no error check
+   assign     pcie_cq_np_req         = 1'b1;
 
    // Local Registers
    reg [7:0]  bmd_256_rx_state;
-   reg        req_compl_o;
-
-   reg [2:0]  req_tc_o;
-   reg        req_td_o;
-   reg        req_ep_o;
-   reg [1:0]  req_attr_o;
-   reg [9:0]  req_len_o;
-   reg [15:0] req_rid_o;
-   reg [7:0]  req_tag_o;
-   reg [7:0]  req_be_o;
-
-   reg [10:0] addr_o;
-   reg [7:0]  wr_be_o;
-   reg [31:0] wr_data_o;
-   reg        wr_en_o;
-
-   reg [7:0]  cpl_ur_found_o;
-   reg [7:0]  cpl_ur_tag_o;
-
-   reg [31:0] cpld_found_o;
-   reg [31:0] cpld_data_size_o;
-   reg        cpld_malformed_o;
    
-   //reg [9:0]          cpld_real_size;
-   //reg [9:0]          cpld_tlp_size;
-   reg [9:0]  cpld_real_size;
-   reg [9:0]  cpld_tlp_size;
-
-   reg 	      cpld_receiving;
-   reg        cpld_complete;
-
-   //output wires
-   wire       pcie_cq_np_req = 1'b1;     
 
    // Generate a signal that indicates if we are currently receiving a packet.
    // This value is one clock cycle delayed from what is actually on the AXIS
@@ -214,7 +184,7 @@ module BMD_RX_ENGINE (
 	 rc_in_packet_q <=  1'b1;
       end
    end
-   assign rc_sop        = !rc_in_packet_q && m_axis_rc_tvalid;
+   assign rc_sop        = ( !rc_in_packet_q && m_axis_rc_tvalid );
 
    /*
     //It uses at 192bit FIFO.
