@@ -189,24 +189,30 @@ module BMD_RX_ENGINE (
 
    //completer request start signal
    always@( posedge clk) begin
-      if( !rst_n )
-	cq_in_packet_q <=  1'b0;
-      else if ( m_axis_cq_tvalid && m_axis_cq_tready && m_axis_cq_tlast )
-	cq_in_packet_q <=  1'b0;
-      else if ( cq_sop && m_axis_cq_tready )
-	cq_in_packet_q <=  1'b1;
+      if( !rst_n ) begin
+	 cq_in_packet_q <=  1'b0;
+      end
+      else if ( m_axis_cq_tvalid && m_axis_cq_tready && m_axis_cq_tlast ) begin
+	 cq_in_packet_q <=  1'b0;
+      end
+      else if ( cq_sop && m_axis_cq_tready ) begin
+	 cq_in_packet_q <=  1'b1;
+      end
    end
 
    assign cq_sop        = ( !cq_in_packet_q && m_axis_cq_tvalid );
 
    //requester completion start signal
    always@( posedge clk ) begin
-      if( !rst_n )
-	rc_in_packet_q <=  1'b0;
-      else if ( m_axis_rc_tvalid && m_axis_rc_tready && m_axis_rc_tlast )
-	rc_in_packet_q <=  1'b0;
-      else if ( rc_sop && m_axis_rc_tready )
-	rc_in_packet_q <=  1'b1;
+      if( !rst_n ) begin
+	 rc_in_packet_q <=  1'b0;
+      end
+      else if ( m_axis_rc_tvalid && m_axis_rc_tready && m_axis_rc_tlast ) begin
+	 rc_in_packet_q <=  1'b0;
+      end
+      else if ( rc_sop && m_axis_rc_tready ) begin
+	 rc_in_packet_q <=  1'b1;
+      end
    end
    assign rc_sop        = !rc_in_packet_q && m_axis_rc_tvalid;
 
@@ -304,7 +310,6 @@ module BMD_RX_ENGINE (
 	 Receiver_side_trans_start <= 1'b0; //not start receive
       end 
       else begin
-
 	 wr_en_o                   <= 1'b0;
 	 req_compl_o               <= 1'b0;
 	 m_axis_cq_tready          <= 1'b1; //treadyをassert、assert中はデータを受け付ける
@@ -412,24 +417,27 @@ module BMD_RX_ENGINE (
 		    if( m_axis_cq_tdata[74:64] <= 11'd4 ) begin
 		       //fifo write
 		       //DW0
-		       if( m_axis_cq_tdata[74:64] == 11'd1 )
-			 fifo_write_data <= { 224'd0, m_axis_cq_tdata[159:128] };
+		       if( m_axis_cq_tdata[74:64] == 11'd1 ) begin
+			  fifo_write_data <= { 224'd0, m_axis_cq_tdata[159:128] };
+		       end
 		       //DW0, 1
-		       else if( m_axis_cq_tdata[74:64] == 11'd2 )
-			 fifo_write_data <= { 192'd0, m_axis_cq_tdata[191:128] };
+		       else if( m_axis_cq_tdata[74:64] == 11'd2 ) begin
+			  fifo_write_data <= { 192'd0, m_axis_cq_tdata[191:128] };
+		       end
 		       //DW0, 1, 2
-		       else if( m_axis_cq_tdata[74:64] == 11'd3 )
-			 fifo_write_data <= { 160'd0, m_axis_cq_tdata[223:128] };
+		       else if( m_axis_cq_tdata[74:64] == 11'd3 ) begin
+			  fifo_write_data <= { 160'd0, m_axis_cq_tdata[223:128] };
+		       end
 		       //DW0~3
 		       else begin
-			 fifo_write_data <= { 128'd0, m_axis_cq_tdata[255:128] };
+			  fifo_write_data <= { 128'd0, m_axis_cq_tdata[255:128] };
 		       end
 
-		       fifo_write_en     <= 1'b1; //receiver fifoへのwr
-		       cq_receiving      <= 1'b0; //パケット受付終了
+		       fifo_write_en      <= 1'b1; //receiver fifoへのwr
+		       cq_receiving       <= 1'b0; //パケット受付終了
 		       
 
-		       bmd_256_rx_state  <= BMD_256_RX_RST; //継続してpacketを受け取れるようにしておく
+		       bmd_256_rx_state   <= BMD_256_RX_RST; //継続してpacketを受け取れるようにしておく
 		       //					      bmd_256_rx_state  <= BMD_256_RX_MEM_WR32_WT;
 		    end
 
@@ -487,8 +495,9 @@ module BMD_RX_ENGINE (
 			  memory_access_type        <= 4'b0000; //initialization
 
 			  //求めるDW数が来たら初期化(分割されてもカウントできるように)
-			  if( total_DW_count == packet_DW_setting ) 
-			    total_DW_count          <= 11'd0;
+			  if( total_DW_count == packet_DW_setting ) begin
+			     total_DW_count         <= 11'd0;
+			  end
 			  
 		       end
 		       //1clk目ではない(headerを含んでいない) and 残りのDWは8以上
@@ -602,21 +611,22 @@ module BMD_RX_ENGINE (
    //受信データ数カウント。レジスタへの保存。
    always @ ( posedge clk ) begin            
       if ( !rst_n ) begin
-	 data_num_counter      <= 32'd0;
+	 data_num_counter       <= 32'd0;
       end
       //user reset.
       else if( throughput_reset_signal ) begin
-	 data_num_counter      <= 32'd0;
+	 data_num_counter       <= 32'd0;
       end
 
       else begin
 	 //every 100ms, initialize and save data to register.
 	 if( THROUGHPUT_100MS == throughput_100ms_counter ) begin
-	    data_num_counter   <= 32'd0 + cq_receiving; //data数reset.もしこのタイミングでデータが来ていればcount
+	    data_num_counter    <= 32'd0 + cq_receiving; //data数reset.もしこのタイミングでデータが来ていればcount
 	 end
 	 else begin
-	    if( cq_receiving )
-	      data_num_counter <= data_num_counter + 1'b1; //data数カウント			
+	    if( cq_receiving ) begin
+	       data_num_counter <= data_num_counter + 1'b1; //data数カウント
+	    end
 	 end		 
       end
    end
@@ -653,9 +663,8 @@ module BMD_RX_ENGINE (
 	 throughput_din_vio    <= 320'd0;		  
       end
       else begin
-	 if( throughput_data_en && ( THROUGHPUT_100MS == throughput_100ms_counter ) ) begin
-	    //287 = 319-32, shift register.
-	    throughput_din_vio <= { throughput_din_vio[287:0], data_num_counter };
+	 if( throughput_data_en && ( THROUGHPUT_100MS == throughput_100ms_counter ) ) begin	    
+	    throughput_din_vio <= { throughput_din_vio[287:0], data_num_counter }; //287 = 319-32, shift register.
 	 end
       end
    end
@@ -809,7 +818,7 @@ module BMD_RX_ENGINE (
             endcase // case ( bram_rd_addr )
          end
       end
-   end
+   end // always @ ( posedge clk )
 
 
    //latencyデータを受け取り、結果をここに突っ込む

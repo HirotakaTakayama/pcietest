@@ -342,7 +342,7 @@ module BMD_TX_ENGINE (
          cpld_waiting            <= 1'b0;
       end
       else begin
-         if (init_rst_i ) begin
+         if ( init_rst_i ) begin
             s_axis_cc_tdata      <= 256'b0;
             s_axis_cc_tkeep      <= 8'b0;
             s_axis_cc_tlast      <= 1'b0;
@@ -511,19 +511,20 @@ module BMD_TX_ENGINE (
 
          //受信側FPGAから送るパケット数をカウント, 受信側FPGAのみで動作
          if( Receiver_side_trans_start && FPGA_RECEIVER_SIDE ) begin
-            echo_tlp_num <= echo_tlp_num  + 1'b1;
+            echo_tlp_num       <= echo_tlp_num  + 1'b1;
          end
          bram_wea <= 1'b0;
 
 
-         if ( fifo_read_en )
-           fifo_read_count    <= fifo_read_count - 10'd1;
-         
-         if ( fifo_read_en && fifo_read_count == 10'd1 )
-           fifo_reading       <= 1'b0;
-
-         if ( cpld_receive_i )
-           request_count      <= request_count - 4'd1;
+         if ( fifo_read_en ) begin
+            fifo_read_count    <= fifo_read_count - 10'd1;
+	 end         
+         if ( fifo_read_en && fifo_read_count == 10'd1 ) begin
+            fifo_reading       <= 1'b0;
+	 end
+         if ( cpld_receive_i ) begin
+            request_count      <= request_count - 4'd1;
+	 end
          
          if ( init_rst_i ) begin            
             s_axis_rq_tdata    <= 256'b0;
@@ -795,7 +796,7 @@ module BMD_TX_ENGINE (
    /*********************************************************************************/
    // for latency check, TLP送信を開始した時点からの時間を計測．
    always @ ( posedge clk ) begin
-      if (!rst_n ) begin
+      if ( !rst_n ) begin
          bram_wr_data    <= 64'd0;
          latency_counter <= 64'd0;
       end
