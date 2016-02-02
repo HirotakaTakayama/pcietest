@@ -159,7 +159,7 @@ module BMD_TX_ENGINE (
 
    //localparameter
    localparam  BRAM_ADDRESS_MAX   = 14'd16383;
-
+   localparam  TAG_FIELD_SIZE     = 4'd8; //タグフィールドのサイズ（5 or 8）
    //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
    assign      FPGA_RECEIVER_SIDE = ( receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0] );
 
@@ -590,11 +590,16 @@ module BMD_TX_ENGINE (
                   tag_offset      <= 1'b0;
                   echo_tlp_num    <= echo_tlp_num - 1'b1; //減算
                end
-               else begin //receiver_FPGA
+               else if( !FPGA_RECEIVER_SIDE ) begin //receiver_FPGA
                   tag_offset      <= 1'b1;
                end
                
-               tag_num = { cur_wr_count[6:0], tag_offset }; //tagの値
+               if( TAG_FIELD_SIZE == 4'd8 ) begin //拡張タグフィールド
+                    tag_num = { cur_wr_count[6:0], tag_offset }; //tagの値
+               end
+               else if( TAG_FIELD_SIZE == 4'd5 ) begin //通常タグフィールド
+                    tag_num = { 3'd0, cur_wr_count[3:0], tag_offset }; //tagの値
+               end
                
                //Requester Requestからデータを発行するためのヘッダ, ここの指定を変えればFPGAからのアクセスになるはず。後々はこれを残しつつFPGAからのアクセスも送れるようにする                  
                s_axis_rq_tdata  <= {128'b0, // padding 

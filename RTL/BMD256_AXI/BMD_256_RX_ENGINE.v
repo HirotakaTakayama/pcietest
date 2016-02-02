@@ -27,9 +27,9 @@
 module BMD_RX_ENGINE (
 		      input              clk,
 		      input              rst_n,
-		      
+
                       /* Initiator reset */
-		      input              init_rst_i,                      
+		      input              init_rst_i,
 
 		      // Completer Request Interface
 		      input [255:0]      m_axis_cq_tdata,
@@ -40,7 +40,7 @@ module BMD_RX_ENGINE (
 		      input [5:0] 	 pcie_cq_np_req_count,
 		      output reg 	 m_axis_cq_tready,
 		      output 	         pcie_cq_np_req,
-		      
+
 		      // Requester Completion Interface
 		      input [255:0]      m_axis_rc_tdata,
 		      input 		 m_axis_rc_tlast,
@@ -48,7 +48,7 @@ module BMD_RX_ENGINE (
 		      input [7:0]        m_axis_rc_tkeep,
 		      input [74:0] 	 m_axis_rc_tuser,
 		      output reg 	 m_axis_rc_tready,
-		      		      
+
                       /*
                        * Memory Read data handshake with Completion 
                        * transmit unit. Transmit unit reponds to 
@@ -115,10 +115,12 @@ module BMD_RX_ENGINE (
 		      //bram access
 		      input [63:0]       bram_rd_data, //come from check_latency
 		      output reg         bram_reb,
-		      output reg [13:0]  bram_rd_addr
-		      
-		      );      
-      
+		      output reg [13:0]  bram_rd_addr,
+
+              //time calc fifo access
+              output reg [63:0] waiting_counter, //最初のパケットが到達した段階からカウントし始めるカウンタ．echo開始までの時間測定用．
+              output cq_sop_out
+		      );
    //FIFO
    /*
     output 	      fifo_write_en;
@@ -144,9 +146,11 @@ module BMD_RX_ENGINE (
 
    assign     cpld_data_err_o        = 1'd0; // no error check
    assign     pcie_cq_np_req         = 1'b1;
-
+   assign     cq_sop_out             = cq_sop;
+   
    // Local Registers
    reg [7:0]  bmd_256_rx_state;
+   
    
 
    // Generate a signal that indicates if we are currently receiving a packet.
@@ -158,7 +162,7 @@ module BMD_RX_ENGINE (
    reg 	      rc_in_packet_q;
 
    //completer request start signal
-   always@( posedge clk) begin
+   always@( posedge clk ) begin
       if( !rst_n ) begin
 	 cq_in_packet_q <=  1'b0;
       end
@@ -245,7 +249,7 @@ module BMD_RX_ENGINE (
    reg [10:0]  wrDWpacket_num_remaining;
    reg [3:0]   memory_access_type;
    reg [10:0]  total_DW_count;
-
+   reg timer_trigger;
    
    always @ ( posedge clk ) begin      
       if ( !rst_n ) begin
@@ -262,7 +266,7 @@ module BMD_RX_ENGINE (
 	 req_rid_o        <= 16'b0;
 	 req_tag_o        <= 8'b0;
 	 req_be_o         <= 8'b0;
-	 addr_o           <= 11'b0; //31'b0よりfixed
+	 addr_o           <= 11'b0;
 
 	 wr_be_o          <= 8'b0;
 	 wr_data_o        <= 32'b0;
@@ -278,6 +282,8 @@ module BMD_RX_ENGINE (
 	 total_DW_count            <= 11'd0;
 
 	 Receiver_side_trans_start <= 1'b0; //not start receive
+     waiting_counter           <= 64'd0;
+     timer_trigger          <= 1'b0;
       end 
       else begin
 	 wr_en_o                   <= 1'b0;
@@ -288,6 +294,16 @@ module BMD_RX_ENGINE (
 	 if ( init_rst_i ) begin
 	    bmd_256_rx_state       <= BMD_256_RX_RST;
 	 end
+
+    //user reset.
+    if( latency_reset_signal ) begin
+        waiting_counter        <= 64'd0;
+        timer_trigger          <= 1'b0;
+    end
+    //最初のパケットを受け取ったらカウント開始
+    if( timer_trigger ) begin
+        waiting_counter        <= waiting_counter + 1'b1;
+    end
 
 	 case ( bmd_256_rx_state )
 	   BMD_256_RX_RST : begin
@@ -351,6 +367,8 @@ module BMD_RX_ENGINE (
 	      //1clk目専用
 	      /////////////////////////
 	      if ( cq_sop ) begin //Completer reQuest start signal ( m_axis_cq_tuser[40](sop)ではだめ)
+            timer_trigger <= 1'b1; //echo用タイマートリガー
+
 		 //Memory Read Request //readなら4'b0000
 		 if( m_axis_cq_tdata[78:75] == RX_MEM_RD_FMT_TYPE ) begin 
 		    // CN - Logic for upper QW. payload長さが1DWであればこれを行う

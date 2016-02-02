@@ -527,9 +527,10 @@ module BMD_EP#
       wire [63:0] bram_rd_data;
 
       wire [31:0] vio_settings_sender_address_for_sender;
-
-      BMD_RX_ENGINE EP_RX (
-	    
+      wire [63:0] waiting_counter;
+      wire cq_sop_out;
+      
+      BMD_RX_ENGINE EP_RX (  
 			   .clk(clk),                           // I
 			   .rst_n(rst_n),                       // I
 
@@ -605,7 +606,10 @@ module BMD_EP#
 			   .bram_rd_addr( bram_rd_addr[13:0] ),//O
 
 			   .Tlp_stop_interrupt( Tlp_stop_interrupt ), //I
-			   .vio_settings_sender_address_for_sender( vio_settings_sender_address_for_sender[31:0] ) //I
+			   .vio_settings_sender_address_for_sender( vio_settings_sender_address_for_sender[31:0] ), //I
+
+			   .waiting_counter( waiting_counter[63:0] ), //O
+			   .cq_sop_out( cq_sop_out ) //O
 			   );
 
       
@@ -832,6 +836,16 @@ module BMD_EP#
 		.bram_rd_data( bram_rd_data[63:0] ) //O
 	);
 
+
+
+	BMD_256_count_wait BMD_256_count_wait
+		(
+			.clk( clk ),
+	 		.rst_n( rst_n ),
+
+	 		.waiting_counter( waiting_counter[63:0] ), //I
+	 		.cq_sop( cq_sop_out ) //I
+			);
 
 endmodule // BMD_EP
 
