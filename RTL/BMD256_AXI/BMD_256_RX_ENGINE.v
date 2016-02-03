@@ -98,28 +98,28 @@ module BMD_RX_ENGINE (
 
 		      //FIFO
 		      output reg [255:0] fifo_write_data,
-		      output reg         fifo_write_en, //b_fifo_receiver side write enable   
+		      output reg         fifo_write_en, //b_fifo_receiver side write enable
 
 		      //settings for PCIe
 		      input [31:0]       packet_DW_setting,
 		      output reg         Receiver_side_trans_start,
 
 		      //latency calc
-		      input [63:0]       latency_counter, //come from TX_ENGINE
-		      output             latency_reset_signal,
+		      input [47:0]       latency_counter, //come from TX_ENGINE
+		      output reg         latency_reset_signal_out,
 		      output             latency_data_en,
 
 		      input              Tlp_stop_interrupt,
 		      input [31:0]       vio_settings_sender_address_for_sender,
 
 		      //bram access
-		      input [63:0]       bram_rd_data, //come from check_latency
+		      input [47:0]       bram_rd_data, //come from check_latency
 		      output reg         bram_reb,
-		      output reg [13:0]  bram_rd_addr,
+		      output reg [12:0]  bram_rd_addr,
 
               //time calc fifo access
-              output reg [63:0] waiting_counter, //最初のパケットが到達した段階からカウントし始めるカウンタ．echo開始までの時間測定用．
-              output cq_sop_out
+              output reg [47:0] waiting_counter, //最初のパケットが到達した段階からカウントし始めるカウンタ．echo開始までの時間測定用．
+              output reg cq_sop_out
 		      );
    //FIFO
    /*
@@ -141,17 +141,26 @@ module BMD_RX_ENGINE (
 
    //benchmark param
    localparam THROUGHPUT_100MS       = 32'd25000000; //250MHzだと1clk4nsなので、1秒は250Mclk. 100msは25Mclk.
-   localparam BRAM_ADDRESS_MAX       = 14'd16383; //bram depth value 
+   localparam BRAM_ADDRESS_MAX       = 13'd8191; //bram depth value 
    
 
    assign     cpld_data_err_o        = 1'd0; // no error check
    assign     pcie_cq_np_req         = 1'b1;
-   assign     cq_sop_out             = cq_sop;
-   
+
    // Local Registers
    reg [7:0]  bmd_256_rx_state;
    
-   
+   //Local wires
+   wire latency_reset_signal;
+
+   always@( posedge clk ) begin
+        if( !rst_n ) begin
+            latency_reset_signal_out <= 1'b0;
+        end
+        else begin
+            latency_reset_signal_out <= latency_reset_signal;
+        end
+    end
 
    // Generate a signal that indicates if we are currently receiving a packet.
    // This value is one clock cycle delayed from what is actually on the AXIS
@@ -189,6 +198,17 @@ module BMD_RX_ENGINE (
       end
    end
    assign rc_sop        = ( !rc_in_packet_q && m_axis_rc_tvalid );
+
+
+   always@( posedge clk ) begin
+        if( !rst_n ) begin
+            cq_sop_out <= 1'b0;
+        end
+        else begin
+            cq_sop_out <= cq_sop;
+        end
+    end
+
 
    /*
     //It uses at 192bit FIFO.
@@ -282,7 +302,7 @@ module BMD_RX_ENGINE (
 	 total_DW_count            <= 11'd0;
 
 	 Receiver_side_trans_start <= 1'b0; //not start receive
-     waiting_counter           <= 64'd0;
+     waiting_counter           <= 48'd0;
      timer_trigger          <= 1'b0;
       end 
       else begin
@@ -297,7 +317,7 @@ module BMD_RX_ENGINE (
 
     //user reset.
     if( latency_reset_signal ) begin
-        waiting_counter        <= 64'd0;
+        waiting_counter        <= 48'd0;
         timer_trigger          <= 1'b0;
     end
     //最初のパケットを受け取ったらカウント開始
@@ -399,7 +419,7 @@ module BMD_RX_ENGINE (
 		 //Memory Write Request. //writeなら4'b0001
 		 ////////////////////////////////
 		 else if( m_axis_cq_tdata[78:75] == RX_MEM_WR_FMT_TYPE ) begin
-		    // CN - Logic for upper QW        					    
+		    // CN - Logic for upper QW
 		    //複数DW受け取り. メモリへの wrはとりあえず記述しない(11/23/2014)
 		    //header and DW0~3 //1clkのみで受け取れるmulti DW receive.
 		    if( m_axis_cq_tdata[74:64] <= 11'd4 ) begin
@@ -676,13 +696,13 @@ module BMD_RX_ENGINE (
       if ( !rst_n ) begin
 	 //bram read domain
 	 bram_reb           <= 1'b0;
-	 bram_rd_addr       <= 14'd0;
+	 bram_rd_addr       <= 13'd0;
       end
       //user reset.
       else if( latency_reset_signal ) begin
 	 //bram read domain
 	 bram_reb           <= 1'b0;
-	 bram_rd_addr       <= 14'd0;
+	 bram_rd_addr       <= 13'd0;
       end
 
       else begin
@@ -696,7 +716,7 @@ module BMD_RX_ENGINE (
 	 if( bram_reb ) begin
 	    //bram operation
 	    if( bram_rd_addr == BRAM_ADDRESS_MAX ) begin
-	       bram_rd_addr <= 14'd0;
+	       bram_rd_addr <= 13'd0;
 	    end
 	    else begin
 	       bram_rd_addr <= bram_rd_addr + 1'b1; //address coorperation
@@ -710,110 +730,72 @@ module BMD_RX_ENGINE (
    /***************************/
    //Latency save to Virtual I/O
    /***************************/
-   //64bit同士の減算なので、1bit多く確保しておく.別にthroughputのように10個である必要はないのだがなんとなく。
-   reg [64:0] latency_d0_in_vio;
-   reg [64:0] latency_d1_in_vio;
-   reg [64:0] latency_d2_in_vio;
-   reg [64:0] latency_d3_in_vio;
-   reg [64:0] latency_d4_in_vio;
-   reg [64:0] latency_d5_in_vio;
-   reg [64:0] latency_d6_in_vio;
-   reg [64:0] latency_d7_in_vio;
-   reg [64:0] latency_d8_in_vio;
-   reg [64:0] latency_d9_in_vio;
-   reg [64:0] latency_d10_in_vio;
-   reg [64:0] latency_d11_in_vio;
-   reg [64:0] latency_d12_in_vio;
-   reg [64:0] latency_d13_in_vio;
-   reg [64:0] latency_d14_in_vio;
-   reg [64:0] latency_d15_in_vio;
-   reg [64:0] latency_d16_in_vio;
-   reg [64:0] latency_d17_in_vio;
-   reg [64:0] latency_d18_in_vio;
-   reg [64:0] latency_d19_in_vio;
+   reg [47:0] latency_d0_in_vio;
+   reg [47:0] latency_d1_in_vio;
+   reg [47:0] latency_d2_in_vio;
+   reg [47:0] latency_d3_in_vio;
+   reg [47:0] latency_d4_in_vio;
+   reg [47:0] latency_d5_in_vio;
+   reg [47:0] latency_d6_in_vio;
+   reg [47:0] latency_d7_in_vio;
+   reg [47:0] latency_d8_in_vio;
+   reg [47:0] latency_d9_in_vio;
+
    reg guarantee_check; //dataが正しいかをチェック
    
+   wire [47:0] latency_result_first = ( latency_counter - bram_rd_data[47:0] - fifo_write_data[47:0] - 1'd1 );
 
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
-         latency_d0_in_vio <= 65'd0;
-         latency_d1_in_vio <= 65'd0;
-         latency_d2_in_vio <= 65'd0;
-         latency_d3_in_vio <= 65'd0;
-         latency_d4_in_vio <= 65'd0;
-         latency_d5_in_vio <= 65'd0;
-         latency_d6_in_vio <= 65'd0;
-         latency_d7_in_vio <= 65'd0;
-         latency_d8_in_vio <= 65'd0;
-         latency_d9_in_vio <= 65'd0;
-         latency_d10_in_vio <= 65'd0;
-         latency_d11_in_vio <= 65'd0;
-         latency_d12_in_vio <= 65'd0;
-         latency_d13_in_vio <= 65'd0;
-         latency_d14_in_vio <= 65'd0;
-         latency_d15_in_vio <= 65'd0;
-         latency_d16_in_vio <= 65'd0;
-         latency_d17_in_vio <= 65'd0;
-         latency_d18_in_vio <= 65'd0;
-         latency_d19_in_vio <= 65'd0;
+         latency_d0_in_vio <= 48'd0;
+         latency_d1_in_vio <= 48'd0;
+         latency_d2_in_vio <= 48'd0;
+         latency_d3_in_vio <= 48'd0;
+         latency_d4_in_vio <= 48'd0;
+         latency_d5_in_vio <= 48'd0;
+         latency_d6_in_vio <= 48'd0;
+         latency_d7_in_vio <= 48'd0;
+         latency_d8_in_vio <= 48'd0;
+         latency_d9_in_vio <= 48'd0;
       end
       else if( latency_reset_signal ) begin
-         latency_d0_in_vio <= 65'd0;
-         latency_d1_in_vio <= 65'd0;
-         latency_d2_in_vio <= 65'd0;
-         latency_d3_in_vio <= 65'd0;
-         latency_d4_in_vio <= 65'd0;
-         latency_d5_in_vio <= 65'd0;
-         latency_d6_in_vio <= 65'd0;
-         latency_d7_in_vio <= 65'd0;
-         latency_d8_in_vio <= 65'd0;
-         latency_d9_in_vio <= 65'd0;
-         latency_d10_in_vio <= 65'd0;
-         latency_d11_in_vio <= 65'd0;
-         latency_d12_in_vio <= 65'd0;
-         latency_d13_in_vio <= 65'd0;
-         latency_d14_in_vio <= 65'd0;
-         latency_d15_in_vio <= 65'd0;
-         latency_d16_in_vio <= 65'd0;
-         latency_d17_in_vio <= 65'd0;
-         latency_d18_in_vio <= 65'd0;
-         latency_d19_in_vio <= 65'd0;
-      end
+            latency_d0_in_vio <= 48'd0;
+            latency_d1_in_vio <= 48'd0;
+            latency_d2_in_vio <= 48'd0;
+            latency_d3_in_vio <= 48'd0;
+            latency_d4_in_vio <= 48'd0;
+            latency_d5_in_vio <= 48'd0;
+            latency_d6_in_vio <= 48'd0;
+            latency_d7_in_vio <= 48'd0;
+            latency_d8_in_vio <= 48'd0;
+            latency_d9_in_vio <= 48'd0;
+        end
       else begin
-         if( latency_data_en && !Tlp_stop_interrupt && bram_reb ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
-            case( bram_rd_addr[13:0] )
-              14'd0 : latency_d0_in_vio      <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd800 : latency_d1_in_vio    <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd1600 : latency_d2_in_vio   <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd2400 : latency_d3_in_vio   <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd3200 : latency_d4_in_vio   <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd4000 : latency_d5_in_vio   <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd4800 : latency_d6_in_vio   <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd5600 : latency_d7_in_vio   <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd6400 : latency_d8_in_vio   <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd7200 : latency_d9_in_vio   <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd8000 : latency_d10_in_vio  <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd8800 : latency_d11_in_vio  <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd9600 : latency_d12_in_vio  <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd10400 : latency_d13_in_vio <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd11200 : latency_d14_in_vio <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd12000 : latency_d15_in_vio <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd12800 : latency_d16_in_vio <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd13600 : latency_d17_in_vio <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd14400 : latency_d18_in_vio <= ( latency_counter - bram_rd_data - 64'd1 );
-              14'd15200 : latency_d19_in_vio <= ( latency_counter - bram_rd_data - 64'd1 );
-              default : latency_d0_in_vio    <= latency_d0_in_vio; //nothing to do
-            endcase // case ( bram_rd_addr )
+            if( latency_data_en && bram_reb ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
+                case( bram_rd_addr )
+                    13'd0    : latency_d0_in_vio <= latency_result_first;
+                    13'd800  : latency_d1_in_vio <= latency_result_first;
+                    13'd1600 : latency_d2_in_vio <= latency_result_first;
+                    13'd2400 : latency_d3_in_vio <= latency_result_first;
+                    13'd3200 : latency_d4_in_vio <= latency_result_first;
+                    13'd4000 : latency_d5_in_vio <= latency_result_first;
+                    13'd4800 : latency_d6_in_vio <= latency_result_first;
+                    13'd5600 : latency_d7_in_vio <= latency_result_first;
+                    13'd6400 : latency_d8_in_vio <= latency_result_first;
+                    13'd7200 : latency_d9_in_vio <= latency_result_first;
+                    default  : latency_d0_in_vio <= latency_d0_in_vio; //nothing to do
+                endcase // case ( bram_rd_addr )
+            end
          end
-      end
    end // always @ ( posedge clk )
+
 
 
    //latencyデータを受け取り、結果をここに突っ込む
    vio_check_latency vio_check_latency
      (
       .clk( clk ),
-      .probe_in0( latency_d0_in_vio ), //65bit
+      .probe_in0( latency_d0_in_vio ), //48bit(もともとは64bitだったが，timingの都合でサイズを小さくした．これでも24時間以上計測できるから問題なし)
       .probe_in1( latency_d1_in_vio ),
       .probe_in2( latency_d2_in_vio ),
       .probe_in3( latency_d3_in_vio ),
@@ -823,16 +805,6 @@ module BMD_RX_ENGINE (
       .probe_in7( latency_d7_in_vio ),
       .probe_in8( latency_d8_in_vio ),
       .probe_in9( latency_d9_in_vio ),
-      .probe_in10( latency_d10_in_vio ),
-      .probe_in11( latency_d11_in_vio ),
-      .probe_in12( latency_d12_in_vio ),
-      .probe_in13( latency_d13_in_vio ),
-      .probe_in14( latency_d14_in_vio ),
-      .probe_in15( latency_d15_in_vio ),
-      .probe_in16( latency_d16_in_vio ),
-      .probe_in17( latency_d17_in_vio ),
-      .probe_in18( latency_d18_in_vio ),
-      .probe_in19( latency_d19_in_vio ),
       //	 .probe_in11( guarantee_check ),
 
       .probe_out0( latency_reset_signal ), //1bit
@@ -847,7 +819,7 @@ module BMD_RX_ENGINE (
    reg cq_tlast_d1;
    reg [10:0] total_DW_count_d1;
 
-   always @ ( posedge clk ) begin            
+   always @ ( posedge clk ) begin
       if ( !rst_n ) begin
 	 guarantee_check   <= 1'b0;
 	 incr_data         <= 10'd0;
@@ -958,12 +930,15 @@ module BMD_RX_ENGINE (
       .clk( clk ),
       .probe0( m_axis_cq_tdata ), //256bit
       .probe1( cq_sop ), //1bit
-      .probe2( cq_receiving ), //1bit
+//      .probe2( cq_receiving ), //1bit
+      .probe2( 1'b0 ), //1bit
       .probe3( wrDWpacket_num_remaining ), //11bit
       .probe4( m_axis_cq_tvalid ), //1bit
       .probe5( m_axis_cq_tready ), //1bit
-      .probe6( m_axis_cq_tkeep ), //8bit
-      .probe7( m_axis_cq_tlast ), //1bit
+ //     .probe6( m_axis_cq_tkeep ), //8bit
+ //     .probe7( m_axis_cq_tlast ), //1bit
+        .probe6( latency_result_first ), //48bit
+        .probe7( latency_d9_in_vio[47:0] ), //48bit
       .probe8( total_DW_count ) //11bit
       );
    

@@ -168,7 +168,7 @@ module BMD_EP#
 
       input fifo_sender_data_prepare_ok;
 
-      //packet 送信数(DW/8)
+      //packet é€ä¿¡æ•°(DW/8)
       input [31:0] packet_data_num;
 
       input 		calc_start;
@@ -384,7 +384,7 @@ module BMD_EP#
 
       //////////////////////          
       //////////////////////      
-      //Dword countに適�?, 送信数を設�?
+      //Dword countã«é©å¿?, é€ä¿¡æ•°ã‚’è¨­å®?
       reg [31:0] packet_DW_count;
       wire [31:0] tx_send_num;
       always @( posedge clk ) begin
@@ -399,13 +399,13 @@ module BMD_EP#
       end
       
       //////////////////////
-      //送信DW数を記�?�
+      //é€ä¿¡DWæ•°ã‚’è¨˜å?¥
       //////////////////////
       vio_num_trans vio_num_trans
 	(
 	 .clk( clk ),
 	 .probe_in0( 1'b0 ), //1bit
-	 .probe_out0( tx_send_num ) //32bit(DW数を�?��?)
+	 .probe_out0( tx_send_num ) //32bit(DWæ•°ã‚’å?¥åŠ?)
 	 );
 
 
@@ -516,20 +516,24 @@ module BMD_EP#
       //
       // Local-Link Receive Controller :
       //
+      localparam ECHO_TRANS_COUNTER_WIDTH = 8'd48; //レイテンシ測定（echo転送）時のカウンタサイズ設定
       wire latency_reset_signal;
-      wire [63:0] latency_counter;
+      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_counter;
             
-      wire [63:0] bram_wr_data;
+      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_wr_data;
       wire bram_wea;
-      wire [13:0] bram_wr_addr;
+      wire [12:0] bram_wr_addr;
       wire bram_reb;
-      wire [13:0] bram_rd_addr;
-      wire [63:0] bram_rd_data;
+      wire [12:0] bram_rd_addr;
+      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_rd_data;
 
       wire [31:0] vio_settings_sender_address_for_sender;
-      wire [63:0] waiting_counter;
+      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] waiting_counter;
       wire cq_sop_out;
-      
+      wire fifo_counter_read_en;
+      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] fifo_counter_value_out;
+      wire fifo_read_trigger;
+
       BMD_RX_ENGINE EP_RX (  
 			   .clk(clk),                           // I
 			   .rst_n(rst_n),                       // I
@@ -598,18 +602,19 @@ module BMD_EP#
 
 			   .Receiver_side_trans_start( Receiver_side_trans_start ), //O
 
-			   .latency_reset_signal( latency_reset_signal ),  //O  //send to BMD_256_** 
-			   .latency_counter( latency_counter[63:0] ), //I //64bit //come from TX_ENGINE
+			   .latency_reset_signal_out( latency_reset_signal ),  //O  //send to BMD_256_** 
+			   .latency_counter( latency_counter ), //I //48bit //come from TX_ENGINE
 			   .latency_data_en( latency_data_en ), //O
-			   .bram_rd_data( bram_rd_data ), //I //64bit //come from check_latency
+			   .bram_rd_data( bram_rd_data ), //I //48bit //come from check_latency
 			   .bram_reb( bram_reb ), //O
-			   .bram_rd_addr( bram_rd_addr[13:0] ),//O
+			   .bram_rd_addr( bram_rd_addr ),//O
 
 			   .Tlp_stop_interrupt( Tlp_stop_interrupt ), //I
 			   .vio_settings_sender_address_for_sender( vio_settings_sender_address_for_sender[31:0] ), //I
 
-			   .waiting_counter( waiting_counter[63:0] ), //O
+			   .waiting_counter( waiting_counter ), //O
 			   .cq_sop_out( cq_sop_out ) //O
+
 			   );
 
       
@@ -653,7 +658,7 @@ module BMD_EP#
             
 			   // Read Port
 
-			   .rd_addr_o(rd_addr[6:0]),         // I [10:0] //どこにもつながって�?な�?感じがあ�?
+			   .rd_addr_o(rd_addr[6:0]),         // I [10:0] //ã©ã“ã«ã‚‚ã¤ãªãŒã£ã¦ã?ãªã?æ„Ÿã˜ãŒã‚ã‚?
 			   .rd_be_o(rd_be),                  // I [3:0]
 			   .rd_data_i(rd_data),              // O [31:0]
 
@@ -668,7 +673,7 @@ module BMD_EP#
 			   
 //			   .mrd_len_i(mrd_len),              // I [31:0]
 //			   .mrd_len_i( 32'd1 ),              // I [31:0] //changed
-			   .mrd_len_i( packet_DW_count ), //data DW数 //changed
+			   .mrd_len_i( packet_DW_count ), //data DWæ•° //changed
 //			   .mrd_len_i( 32'd960 ), //120packet
 
 			   
@@ -696,14 +701,14 @@ module BMD_EP#
 			   .mwr_done_o(mwr_done),            // O
 			   .mwr_addr_i(mwr_addr),            // I [31:0]
 			   
-//			   .mwr_len_i(mrd_len),              // I [31:0] //mwr_len_i == mrd_len_i になって�?�?
-//			   .mwr_len_i( 32'd1 ),              // I [31:0] //mwr_len_i == mrd_len_i になって�?�? //changed
-			   .mwr_len_i( packet_DW_count ), //data DW数 //changed
+//			   .mwr_len_i(mrd_len),              // I [31:0] //mwr_len_i == mrd_len_i ã«ãªã£ã¦ã?ã‚?
+//			   .mwr_len_i( 32'd1 ),              // I [31:0] //mwr_len_i == mrd_len_i ã«ãªã£ã¦ã?ã‚? //changed
+			   .mwr_len_i( packet_DW_count ), //data DWæ•° //changed
 //			   .mwr_len_i( 32'd960 ),
 
-//			   .mwr_count_i(mwr_count),          // I [31:0] //TXでのrmwr_count()とな�?
-//			   .mwr_count_i( 24'd1 ),          // I [31:0] //TXでのrmwr_count()とな�? //changed
-			   .mwr_count_i( packet_DW_count ), //temporaly //TXでのrmwr_count()とな�? //changed
+//			   .mwr_count_i(mwr_count),          // I [31:0] //TXã§ã®rmwr_count()ã¨ãªã‚?
+//			   .mwr_count_i( 24'd1 ),          // I [31:0] //TXã§ã®rmwr_count()ã¨ãªã‚? //changed
+			   .mwr_count_i( packet_DW_count ), //temporaly //TXã§ã®rmwr_count()ã¨ãªã‚? //changed
 //			   .mwr_count_i( 24'd960 ),
 
 
@@ -755,13 +760,20 @@ module BMD_EP#
 			   //bram
 			   .latency_reset_signal( latency_reset_signal ), //I
 			   .latency_data_en( latency_data_en ), //I
-			   .latency_counter( latency_counter[63:0] ), //O //64bit //send to RX_ENGINE. これは絶対時刻
-			   .bram_wr_data( bram_wr_data ), //O //64bit //send to check_latency. これはある�?ータの送信時�?�時刻
+			   .latency_counter( latency_counter ), //O //48bit //send to RX_ENGINE. ã“ã‚Œã¯çµ¶å¯¾æ™‚åˆ»
+
+			   .bram_wr_data( bram_wr_data ), //O //64bit //send to check_latency. ã“ã‚Œã¯ã‚ã‚‹ãƒ?ãƒ¼ã‚¿ã®é€ä¿¡æ™‚ã?®æ™‚åˆ»
 			   .bram_wea( bram_wea ), //O
-			   .bram_wr_addr( bram_wr_addr[13:0] ), //O //12bit
+			   .bram_wr_addr( bram_wr_addr[12:0] ), //O //13bit
 
 			   .Tlp_stop_interrupt( Tlp_stop_interrupt ), //O
-			   .vio_settings_sender_address_for_sender( vio_settings_sender_address_for_sender[31:0] ), //O
+			   .vio_settings_sender_address_for_sender_out( vio_settings_sender_address_for_sender[31:0] ), //O
+
+			   //count_wait
+			   .fifo_counter_read_en( fifo_counter_read_en ), //O
+			   .fifo_read_trigger( fifo_read_trigger ), //I
+               .fifo_counter_value_out( fifo_counter_value_out ), //I
+               .waiting_counter( waiting_counter ), //I
 
 			   //debug signal
 			   .m_axis_rc_tdata_i(m_axis_rc_tdata),
@@ -790,7 +802,7 @@ module BMD_EP#
 			      
 //			      .mrd_len_i(mrd_len),                 // I
 //			      .mrd_len_i( 32'd1 ),                 // I //changed
-			      .mrd_len_i( packet_DW_count ), //data DW数 //changed
+			      .mrd_len_i( packet_DW_count ), //data DWæ•° //changed
 //			      .mrd_len_i( 32'd960 ),
 
 			      .mrd_cur_rd_count_i(cur_mrd_count),  // I [15:0]    
@@ -822,18 +834,18 @@ module BMD_EP#
 		.clk( clk ),
 	 	.rst_n( rst_n ),
 	 	.latency_reset_signal( latency_reset_signal ), //comes from RX_ENGINE, user reset.
-	 	.latency_counter( latency_counter[63:0] ), //I //64bit //come from TX_ENGINE
+	 	.latency_counter( latency_counter ), //I //48bit //come from TX_ENGINE
 
 		//write domain, comes from TX_ENGINE
 		.bram_wea( bram_wea ),
-		.bram_wr_addr( bram_wr_addr[13:0] ),
-		.bram_wr_data( bram_wr_data[63:0] ),
+		.bram_wr_addr( bram_wr_addr ),
+		.bram_wr_data( bram_wr_data ),
 
 		//read domain, comes from RX_ENGINE
 		.bram_reb( bram_reb ),
-		.bram_rd_addr( bram_rd_addr[13:0] ),
+		.bram_rd_addr( bram_rd_addr ),
 		//read domain send to RX_ENGINE
-		.bram_rd_data( bram_rd_data[63:0] ) //O
+		.bram_rd_data( bram_rd_data ) //O
 	);
 
 
@@ -842,9 +854,15 @@ module BMD_EP#
 		(
 			.clk( clk ),
 	 		.rst_n( rst_n ),
+	 		.latency_reset_signal( latency_reset_signal ),
 
-	 		.waiting_counter( waiting_counter[63:0] ), //I
-	 		.cq_sop( cq_sop_out ) //I
+	 		.cq_sop( cq_sop_out ), //I
+	 		.waiting_counter( waiting_counter ), //I
+	 		
+	 		.fifo_counter_read_en( fifo_counter_read_en ), //I
+	 		.fifo_counter_value_out( fifo_counter_value_out ), //O
+
+			.fifo_read_trigger( fifo_read_trigger ) //O
 			);
 
 endmodule // BMD_EP

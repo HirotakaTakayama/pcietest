@@ -141,24 +141,30 @@ module BMD_TX_ENGINE (
 		      //latency signal
 		      input              latency_reset_signal,
 		      input              latency_data_en,
-		      output reg [63:0]  latency_counter, //send to RX_ENGINE. これは絶対時刻
+		      output reg [47:0]  latency_counter, //send to RX_ENGINE. これは送信側FPGAの絶対時刻
 
 		      //BRAM
-		      output reg [63:0]  bram_wr_data, //send to check_latency. これはあるデータの送信時の時刻
+		      output reg [47:0]  bram_wr_data, //send to check_latency. これは送信側FPGAのあるデータの送信時の時刻
 		      output reg         bram_wea,
-		      output reg [13:0]  bram_wr_addr,
-		      
-		      output [31:0]      vio_settings_sender_address_for_sender,
+		      output reg [12:0]  bram_wr_addr,
+
+		      output reg [31:0]  vio_settings_sender_address_for_sender_out,
 		      output reg         Tlp_stop_interrupt,
+
+              //count_wait
+              input              fifo_read_trigger,
+              output reg         fifo_counter_read_en,
+              input [47:0]       waiting_counter,
+              input [47:0]       fifo_counter_value_out,
 
 		      //debug signal
 		      input              m_axis_rc_tlast_i,
 		      input [255:0]      m_axis_rc_tdata_i,
 		      input              m_axis_rc_tvalid_i
-                      );      
+                      );
 
    //localparameter
-   localparam  BRAM_ADDRESS_MAX   = 14'd16383;
+   localparam  BRAM_ADDRESS_MAX   = 13'd8191;
    localparam  TAG_FIELD_SIZE     = 4'd8; //タグフィールドのサイズ（5 or 8）
    //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
    assign      FPGA_RECEIVER_SIDE = ( receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0] );
@@ -168,12 +174,11 @@ module BMD_TX_ENGINE (
    assign      rd_be_o            = req_be_i[3:0];
 
 
-   // Local registers   
-   
+   // Local registers
    reg [12:0]  byte_count;
    reg [6:0]   lower_addr;
 
-   reg         req_compl_q;                 
+   reg         req_compl_q;
 
    reg [2:0]   bmd_256_tx_state;
 
@@ -227,7 +232,8 @@ module BMD_TX_ENGINE (
    wire        cfg_bm_en       = 1'b1;
    wire [31:0] mwr_addr        = mwr_addr_i;
    wire [31:0] mrd_addr        = mrd_addr_i;
-      
+
+   wire [31:0] vio_settings_sender_address_for_sender;
 
    function [31:0] dword_data_align;
       input [31:0]    data;
@@ -292,6 +298,16 @@ module BMD_TX_ENGINE (
          req_compl_q <= req_compl_i;
       end
    end
+
+   always @ ( posedge clk ) begin
+        if (!rst_n ) begin
+            vio_settings_sender_address_for_sender_out <= 32'd0;
+        end
+        else begin
+            vio_settings_sender_address_for_sender_out <= vio_settings_sender_address_for_sender;
+        end
+    end
+
 
    /* Interrupt Controller */
    BMD_INTR_CTRL BMD_INTR_CTRL  (
@@ -429,7 +445,8 @@ module BMD_TX_ENGINE (
    reg [7:0]   tag_num;
    reg [9:0]   incr_data_counter;
    
-   reg [13:0]  echo_tlp_num;
+   reg [12:0]  echo_tlp_num;
+   
 
    //local wires
    wire [31:0] receiveside_fpga_address;      
@@ -437,6 +454,7 @@ module BMD_TX_ENGINE (
    
    wire        vio_latency_count_continue;
    wire        vio_echo_mode;
+   wire [47:0] wait_diff = ( waiting_counter[47:0] - fifo_counter_value_out[47:0] ); //受信側FPGAでの待ち時間
    
    
    always @ ( posedge clk ) begin
@@ -476,21 +494,26 @@ module BMD_TX_ENGINE (
          incr_data_counter  <= 10'd0;
 
          //bram 
-         bram_wr_addr       <= 14'd0;
+         bram_wr_addr       <= 13'd0;
          bram_wea           <= 1'b0;
 
-         echo_tlp_num       <= 14'd0;
+         echo_tlp_num       <= 13'd0;
          tag_num            <= 8'd0;
          Tlp_stop_interrupt <= 1'b0;
+
+         fifo_counter_read_en <= 1'b0;
       end
+
       else begin // if (!rst_n )
          //user reset
          if( latency_reset_signal ) begin
             incr_data_counter  <= 10'd0;
-            echo_tlp_num       <= 14'd0;
-            bram_wr_addr       <= 14'd0;
+            echo_tlp_num       <= 13'd0;
+            bram_wr_addr       <= 13'd0;
             bram_wea           <= 1'b1; //これは1にしてresetを行う
             Tlp_stop_interrupt <= 1'b0;
+
+            fifo_counter_read_en <= 1'b0;
             cur_wr_count       <= 24'd0; //tag
          end
 
@@ -511,7 +534,7 @@ module BMD_TX_ENGINE (
             request_count      <= request_count - 4'd1;
 	 end
          
-         if ( init_rst_i ) begin            
+         if ( init_rst_i ) begin
             s_axis_rq_tdata    <= 256'b0;
             s_axis_rq_tkeep    <= 8'b0;
             s_axis_rq_tlast    <= 1'b0;
@@ -549,6 +572,7 @@ module BMD_TX_ENGINE (
          rmwr_count           <= mwr_count_i[23:0]; //
          rmrd_count           <= mrd_count_i[23:0]; //BMD_EPで設定できる
 
+         fifo_counter_read_en <= 1'b0; //基本的には0， header受信時のみ1
 
          //!mem_writing : header実行前はassertされ、payloadを処理しきるまでdeassertされる。
          if ( !mem_writing ) begin
@@ -572,10 +596,9 @@ module BMD_TX_ENGINE (
             //receiveside_fpga_address: 受信側FPGA（ここだとecho側FPGAから見た送信側FPGA）のマッピングされたアドレス番地を指定する．TLP送信側FPGAがechoしないようにするために必要．
             //vio_settings_sender_address_for_sender: 送信側FPGAにとっての送信側FPGAのアドレス番地設定．複数のFPGAを使っていても同じ設定となる．
             //receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0], 送信側FPGAがfffffffだとしたら，どのFPGAでもvio_settings_sender_address_for_senderをfffffffとする．
-            if( s_axis_rq_tready[0] && 
-          	!Tlp_stop_interrupt &&
-		( test_sender_start_vio || 
-                  ( |echo_tlp_num[13:0] && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //receiver FPGAからのechoあり
+            if( s_axis_rq_tready[0] && !Tlp_stop_interrupt &&
+            ( test_sender_start_vio ||
+                  ( fifo_read_trigger && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //receiver FPGAからのechoあり
 	       //            if( s_axis_rq_tready[0] && test_sender_start_vio ) begin //receuver FPGAからのechoなし
 
                cur_wr_count       <= cur_wr_count + 1'b1;
@@ -595,10 +618,10 @@ module BMD_TX_ENGINE (
                end
                
                if( TAG_FIELD_SIZE == 4'd8 ) begin //拡張タグフィールド
-                    tag_num = { cur_wr_count[6:0], tag_offset }; //tagの値
+                    tag_num       = { cur_wr_count[6:0], tag_offset }; //tagの値
                end
                else if( TAG_FIELD_SIZE == 4'd5 ) begin //通常タグフィールド
-                    tag_num = { 3'd0, cur_wr_count[3:0], tag_offset }; //tagの値
+                    tag_num       = { 3'd0, cur_wr_count[3:0], tag_offset }; //tagの値
                end
                
                //Requester Requestからデータを発行するためのヘッダ, ここの指定を変えればFPGAからのアクセスになるはず。後々はこれを残しつつFPGAからのアクセスも送れるようにする                  
@@ -623,13 +646,15 @@ module BMD_TX_ENGINE (
                                     };
 
 
-               rq_last_be       <= (mwr_len_i[9:0] == 1'b1) ? 4'b0 : mwr_lbe_i; //1DW write requestの時
-               rq_first_be      <= mwr_fbe_i; 
+               rq_last_be       <= ( mwr_len_i[9:0] == 10'd1 ) ? 4'b0 : mwr_lbe_i; //1DW write requestの時
+               rq_first_be      <= mwr_fbe_i;
                fifo_reading     <= 1'b1; //If this signal and rq_tready are asserted, fifo_read_en will be enable.
                fifo_read_count  <= mwr_len_i[12:3]; //10bit size.[3]から見ることで、Dword / 8(つまりfifoの残数)を取得する
 
                cur_mwr_dw_count <= mwr_len_i[9:0]; //DWord Countが設定される
                mem_writing      <= 1'b1;
+
+               fifo_counter_read_en <= ( fifo_read_trigger && FPGA_RECEIVER_SIDE && vio_echo_mode );
             end
 
 
@@ -653,11 +678,10 @@ module BMD_TX_ENGINE (
          // mem_writingのとき
          else begin
             s_axis_rq_tvalid  <= 1'b1; //treadyがenの時はvldもen. when transaction issue, this signal will assert.
-            
             //rq_tvalid && rq_treadyの時にデータを送る. treadyはIPが受け付けられる状態かを示す.当然IPからくる.
             if ( s_axis_rq_tready[0] ) begin
 	       //                s_axis_rq_tdata   <= fifo_read_data;
-               s_axis_rq_tdata   <= { 246'd0, incr_data_counter }; //temp
+               s_axis_rq_tdata   <= { 208'd0, wait_diff }; //256bytes{  [パケットを送るときの時間] - [パケットを受け取った時の時間] }
                s_axis_rq_tkeep   <= 8'hFF; //all of the data are enabled.
                cur_mwr_dw_count  <= cur_mwr_dw_count - 4'h8; //decrement 256bit(8DW)
 
@@ -666,7 +690,6 @@ module BMD_TX_ENGINE (
                   s_axis_rq_tlast <= 1'b1; //transaction 終了信号
                   mem_writing     <= 1'b0; //これで再びheader送信可能に
                   fifo_reading    <= 1'b0; //FIFOから受信終了
-                  
                   bram_wea        <= 1'b1; //BRAMに入れる
 
 		  //                  if ( cur_wr_count == rmwr_count )  begin //rmwr_countはヘッダの送られる最大回数.
@@ -686,7 +709,7 @@ module BMD_TX_ENGINE (
                   //LATENCY評価用.
                   if( vio_latency_count_continue ) begin //BRAMに書き続けてチェックするver
    		     if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
-   			bram_wr_addr   <= 14'd0;
+   			bram_wr_addr   <= 13'd0;
    		     end
    		     else begin
    			bram_wr_addr   <= bram_wr_addr + 1'b1;
@@ -787,12 +810,12 @@ module BMD_TX_ENGINE (
    // for latency check, TLP送信を開始した時点からの時間を計測．
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
-         bram_wr_data    <= 64'd0;
-         latency_counter <= 64'd0;
+         bram_wr_data    <= 48'd0;
+         latency_counter <= 48'd0;
       end
       else if( latency_reset_signal ) begin
-         bram_wr_data    <= 64'd0;
-         latency_counter <= 64'd0;
+         bram_wr_data    <= 48'd0;
+         latency_counter <= 48'd0;
       end
       else if( test_sender_start_vio ) begin //TLP送信かつ，latency測定開始時にカウント開始
          bram_wr_data    <= bram_wr_data + 1'b1;
@@ -825,7 +848,7 @@ module BMD_TX_ENGINE (
    vio_sender_fpga_address vio_sender_fpga_address
      (
       .clk( clk ),
-      .probe_in0( echo_tlp_num[13:0] ), //14bit
+      .probe_in0( { 1'b0, echo_tlp_num[12:0] } ), //14bit
       .probe_out0( vio_settings_sender_address_for_sender[31:0] ), //32bit //address of sender side fpga BAR1.
       .probe_out1( vio_latency_count_continue ), //1bit //レイテンシチェックを継続して行うか，ちょっとの間だけ行うかを決める.0:継続しない．1:継続してBRAMへ書き込み
       .probe_out2( vio_echo_mode ) //1bit //レイテンシを測るか（受信側FPGAからechoを返すか）どうかを決める.0:echoなし（スループットチェック用）.1:echoあり（レイテンシチェック用）
