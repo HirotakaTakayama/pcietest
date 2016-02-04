@@ -22,20 +22,21 @@ module BMD_256_check_latency
 		input clk, //250MHz
 		input rst_n,
 		input latency_reset_signal, //comes from RX_ENGINE, user reset.
-		input [47:0] latency_counter, //48bit
+		input [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_counter, //48bit
 
 		//write domain, comes from TX_ENGINE
 		input bram_wea, //write enable
 		input [12:0] bram_wr_addr, //write address
-		input [47:0] bram_wr_data, //48bit
+		input [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_wr_data, //48bit
 
 		//read domain, comes from RX_ENGINE
 		input bram_reb, //read enable
 		input [12:0] bram_rd_addr,
 		//read domain send to RX_ENGINE
-		output [47:0] bram_rd_data
+		output [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_rd_data
        );
 
+       localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
 
       /******************************************************/
       //depth1024, write first, Simple Dual-port Block RAM. not common clock.
@@ -52,13 +53,13 @@ module BMD_256_check_latency
 	 .clka( clk ),
 	 .wea( bram_wea ), //write enable port A.
 	 .addra( bram_wr_addr ), //13bit //write address
-	 .dina( bram_wr_data[47:0] ), //48bit
+	 .dina( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
 
 	 .clkb( clk ),
 	 .rstb( latency_reset_signal ), //reset around latency by VIO
 	 .enb( bram_reb ), /*sender FPGAのRX_ENGINEにデータが来たとき*/
 	 .addrb( bram_rd_addr ), //13bit //read address /* まだrdしていない番地。*/
-	 .doutb( bram_rd_data[47:0] ) //48bit
+	 .doutb( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //40bit
 	 );
 
 
@@ -67,11 +68,11 @@ module BMD_256_check_latency
 			.clk( clk ),
 			.probe0( bram_wea ), //1bit
       		.probe1( bram_wr_addr ), //13bit
-      		.probe2( bram_wr_data[47:0] ), //48bit
+      		.probe2( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
       		.probe3( bram_reb ), //1bit
       		.probe4( bram_rd_addr ), //13bit
-      		.probe5( bram_rd_data[47:0] ), //48bit
-      		.probe6( latency_counter[47:0] ) //48bit
+      		.probe5( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
+      		.probe6( latency_counter[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //40bit
 		);
 
 endmodule

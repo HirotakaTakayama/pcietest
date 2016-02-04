@@ -141,10 +141,10 @@ module BMD_TX_ENGINE (
 		      //latency signal
 		      input              latency_reset_signal,
 		      input              latency_data_en,
-		      output reg [47:0]  latency_counter, //send to RX_ENGINE. これは送信側FPGAの絶対時刻
+		      output reg [ECHO_TRANS_COUNTER_WIDTH - 1:0]  latency_counter, //send to RX_ENGINE. これは送信側FPGAの絶対時刻
 
 		      //BRAM
-		      output reg [47:0]  bram_wr_data, //send to check_latency. これは送信側FPGAのあるデータの送信時の時刻
+		      output reg [ECHO_TRANS_COUNTER_WIDTH - 1:0]  bram_wr_data, //send to check_latency. これは送信側FPGAのあるデータの送信時の時刻
 		      output reg         bram_wea,
 		      output reg [12:0]  bram_wr_addr,
 
@@ -154,8 +154,8 @@ module BMD_TX_ENGINE (
               //count_wait
               input              fifo_read_trigger,
               output reg         fifo_counter_read_en,
-              input [47:0]       waiting_counter,
-              input [47:0]       fifo_counter_value_out,
+              input [ECHO_TRANS_COUNTER_WIDTH - 1:0]       waiting_counter,
+              input [ECHO_TRANS_COUNTER_WIDTH - 1:0]       fifo_counter_value_out,
 
 		      //debug signal
 		      input              m_axis_rc_tlast_i,
@@ -166,6 +166,8 @@ module BMD_TX_ENGINE (
    //localparameter
    localparam  BRAM_ADDRESS_MAX   = 13'd8191;
    localparam  TAG_FIELD_SIZE     = 4'd8; //タグフィールドのサイズ（5 or 8）
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+
    //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
    assign      FPGA_RECEIVER_SIDE = ( receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0] );
 
@@ -454,7 +456,8 @@ module BMD_TX_ENGINE (
    
    wire        vio_latency_count_continue;
    wire        vio_echo_mode;
-   wire [47:0] wait_diff = ( waiting_counter[47:0] - fifo_counter_value_out[47:0] ); //受信側FPGAでの待ち時間
+   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] wait_diff = ( waiting_counter[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 
+                                                        fifo_counter_value_out[ECHO_TRANS_COUNTER_WIDTH - 1:0] ); //受信側FPGAでの待ち時間
    
    
    always @ ( posedge clk ) begin
@@ -810,12 +813,12 @@ module BMD_TX_ENGINE (
    // for latency check, TLP送信を開始した時点からの時間を計測．
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
-         bram_wr_data    <= 48'd0;
-         latency_counter <= 48'd0;
+         bram_wr_data    <= 40'd0;
+         latency_counter <= 40'd0;
       end
       else if( latency_reset_signal ) begin
-         bram_wr_data    <= 48'd0;
-         latency_counter <= 48'd0;
+         bram_wr_data    <= 40'd0;
+         latency_counter <= 40'd0;
       end
       else if( test_sender_start_vio ) begin //TLP送信かつ，latency測定開始時にカウント開始
          bram_wr_data    <= bram_wr_data + 1'b1;

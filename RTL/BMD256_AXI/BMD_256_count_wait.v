@@ -5,13 +5,15 @@ module BMD_256_count_wait
 		input latency_reset_signal,
 
 		input cq_sop,
-		input [47:0] waiting_counter, //最初のパケットを受信してから動き出すカウンタ
+		input [ECHO_TRANS_COUNTER_WIDTH - 1:0] waiting_counter, //最初のパケットを受信してから動き出すカウンタ
 		
 		input fifo_counter_read_en, //from TX
-		output [47:0] fifo_counter_value_out,
+		output [ECHO_TRANS_COUNTER_WIDTH - 1:0] fifo_counter_value_out,
 
 		output reg fifo_read_trigger //to TX
 	);
+
+    localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
 
 	wire rst_fifo = ( !rst_n || latency_reset_signal );
 	wire fifo_counter_full; //送信パケット数とdepthサイズを合わせれば，これが最後に立つ
@@ -35,17 +37,17 @@ module BMD_256_count_wait
     end
 
 
-	fifo_generator_0 fifo_48in48out8192depth
+	fifo_generator_0 fifo_40in40out8192depth
 		(
 			.clk( clk ),
 			.srst( rst_fifo ), 
 			//wr
 			.wr_en( cq_sop ),
-			.din( waiting_counter ), //48bit
+			.din( waiting_counter ), //40bit
 
 			//rd
 			.rd_en( fifo_counter_read_en ), //1bit
-			.dout( fifo_counter_value_out ), //48bit //O
+			.dout( fifo_counter_value_out ), //40bit //O
 			.full( fifo_counter_full ), //1bit //O
 			.empty( fifo_counter_empty ) //1bit //O
 		);
@@ -54,9 +56,9 @@ module BMD_256_count_wait
         ila_fifo_check ila_fifo_check (
             .clk( clk ),
             .probe0( cq_sop ), //1bit
-            .probe1( waiting_counter ), //48bit
+            .probe1( waiting_counter ), //40bit
             .probe2( fifo_counter_read_en ), //1bit
-            .probe3( fifo_counter_value_out ), //48bit
+            .probe3( fifo_counter_value_out ), //40bit
             .probe4( fifo_counter_full ), //1bit
             .probe5( fifo_counter_empty ) //1bit
             );

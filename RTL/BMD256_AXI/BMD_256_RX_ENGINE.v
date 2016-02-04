@@ -105,7 +105,7 @@ module BMD_RX_ENGINE (
 		      output reg         Receiver_side_trans_start,
 
 		      //latency calc
-		      input [47:0]       latency_counter, //come from TX_ENGINE
+		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0]       latency_counter, //come from TX_ENGINE
 		      output reg         latency_reset_signal_out,
 		      output             latency_data_en,
 
@@ -113,12 +113,12 @@ module BMD_RX_ENGINE (
 		      input [31:0]       vio_settings_sender_address_for_sender,
 
 		      //bram access
-		      input [47:0]       bram_rd_data, //come from check_latency
+		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0]       bram_rd_data, //come from check_latency
 		      output reg         bram_reb,
 		      output reg [12:0]  bram_rd_addr,
 
               //time calc fifo access
-              output reg [47:0] waiting_counter, //最初のパケットが到達した段階からカウントし始めるカウンタ．echo開始までの時間測定用．
+              output reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] waiting_counter, //最初のパケットが到達した段階からカウントし始めるカウンタ．echo開始までの時間測定用．
               output reg cq_sop_out
 		      );
    //FIFO
@@ -142,8 +142,8 @@ module BMD_RX_ENGINE (
    //benchmark param
    localparam THROUGHPUT_100MS       = 32'd25000000; //250MHzだと1clk4nsなので、1秒は250Mclk. 100msは25Mclk.
    localparam BRAM_ADDRESS_MAX       = 13'd8191; //bram depth value 
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
    
-
    assign     cpld_data_err_o        = 1'd0; // no error check
    assign     pcie_cq_np_req         = 1'b1;
 
@@ -302,7 +302,7 @@ module BMD_RX_ENGINE (
 	 total_DW_count            <= 11'd0;
 
 	 Receiver_side_trans_start <= 1'b0; //not start receive
-     waiting_counter           <= 48'd0;
+     waiting_counter           <= 40'd0;
      timer_trigger          <= 1'b0;
       end 
       else begin
@@ -317,7 +317,7 @@ module BMD_RX_ENGINE (
 
     //user reset.
     if( latency_reset_signal ) begin
-        waiting_counter        <= 48'd0;
+        waiting_counter        <= 40'd0;
         timer_trigger          <= 1'b0;
     end
     //最初のパケットを受け取ったらカウント開始
@@ -730,45 +730,46 @@ module BMD_RX_ENGINE (
    /***************************/
    //Latency save to Virtual I/O
    /***************************/
-   reg [47:0] latency_d0_in_vio;
-   reg [47:0] latency_d1_in_vio;
-   reg [47:0] latency_d2_in_vio;
-   reg [47:0] latency_d3_in_vio;
-   reg [47:0] latency_d4_in_vio;
-   reg [47:0] latency_d5_in_vio;
-   reg [47:0] latency_d6_in_vio;
-   reg [47:0] latency_d7_in_vio;
-   reg [47:0] latency_d8_in_vio;
-   reg [47:0] latency_d9_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d0_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d1_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d2_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d3_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d4_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d5_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d6_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d7_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d8_in_vio;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d9_in_vio;
 
    reg guarantee_check; //dataが正しいかをチェック
    
-   wire [47:0] latency_result_first = ( latency_counter - bram_rd_data[47:0] - fifo_write_data[47:0] - 1'd1 );
+   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result_first = ( latency_counter - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 
+                                                                    fifo_write_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 1'd1 );
 
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
-         latency_d0_in_vio <= 48'd0;
-         latency_d1_in_vio <= 48'd0;
-         latency_d2_in_vio <= 48'd0;
-         latency_d3_in_vio <= 48'd0;
-         latency_d4_in_vio <= 48'd0;
-         latency_d5_in_vio <= 48'd0;
-         latency_d6_in_vio <= 48'd0;
-         latency_d7_in_vio <= 48'd0;
-         latency_d8_in_vio <= 48'd0;
-         latency_d9_in_vio <= 48'd0;
+         latency_d0_in_vio <= 40'd0;
+         latency_d1_in_vio <= 40'd0;
+         latency_d2_in_vio <= 40'd0;
+         latency_d3_in_vio <= 40'd0;
+         latency_d4_in_vio <= 40'd0;
+         latency_d5_in_vio <= 40'd0;
+         latency_d6_in_vio <= 40'd0;
+         latency_d7_in_vio <= 40'd0;
+         latency_d8_in_vio <= 40'd0;
+         latency_d9_in_vio <= 40'd0;
       end
       else if( latency_reset_signal ) begin
-            latency_d0_in_vio <= 48'd0;
-            latency_d1_in_vio <= 48'd0;
-            latency_d2_in_vio <= 48'd0;
-            latency_d3_in_vio <= 48'd0;
-            latency_d4_in_vio <= 48'd0;
-            latency_d5_in_vio <= 48'd0;
-            latency_d6_in_vio <= 48'd0;
-            latency_d7_in_vio <= 48'd0;
-            latency_d8_in_vio <= 48'd0;
-            latency_d9_in_vio <= 48'd0;
+            latency_d0_in_vio <= 40'd0;
+            latency_d1_in_vio <= 40'd0;
+            latency_d2_in_vio <= 40'd0;
+            latency_d3_in_vio <= 40'd0;
+            latency_d4_in_vio <= 40'd0;
+            latency_d5_in_vio <= 40'd0;
+            latency_d6_in_vio <= 40'd0;
+            latency_d7_in_vio <= 40'd0;
+            latency_d8_in_vio <= 40'd0;
+            latency_d9_in_vio <= 40'd0;
         end
       else begin
             if( latency_data_en && bram_reb ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
@@ -795,7 +796,7 @@ module BMD_RX_ENGINE (
    vio_check_latency vio_check_latency
      (
       .clk( clk ),
-      .probe_in0( latency_d0_in_vio ), //48bit(もともとは64bitだったが，timingの都合でサイズを小さくした．これでも24時間以上計測できるから問題なし)
+      .probe_in0( latency_d0_in_vio ), //40bit(もともとは64bitだったが，timingの都合でサイズを小さくした．これでも24時間以上計測できるから問題なし)
       .probe_in1( latency_d1_in_vio ),
       .probe_in2( latency_d2_in_vio ),
       .probe_in3( latency_d3_in_vio ),
@@ -937,8 +938,8 @@ module BMD_RX_ENGINE (
       .probe5( m_axis_cq_tready ), //1bit
  //     .probe6( m_axis_cq_tkeep ), //8bit
  //     .probe7( m_axis_cq_tlast ), //1bit
-        .probe6( latency_result_first ), //48bit
-        .probe7( latency_d9_in_vio[47:0] ), //48bit
+        .probe6( latency_result_first ), //40bit
+        .probe7( latency_d9_in_vio[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
       .probe8( total_DW_count ) //11bit
       );
    

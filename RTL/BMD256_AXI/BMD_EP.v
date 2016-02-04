@@ -516,7 +516,7 @@ module BMD_EP#
       //
       // Local-Link Receive Controller :
       //
-      localparam ECHO_TRANS_COUNTER_WIDTH = 8'd48; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+      localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
       wire latency_reset_signal;
       wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_counter;
             
