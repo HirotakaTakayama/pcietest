@@ -25,109 +25,109 @@
 `timescale 1ns/1ns
 
 module BMD_TX_ENGINE (
-                      input clk, //it's a user_clk(250MHz).
-                      input rst_n, //!user_reset
+                      input 					  clk, //it's a user_clk(250MHz).
+                      input 					  rst_n, //!user_reset
 		      
-		      output reg         s_axis_rq_tlast, //O
-		      output reg [255:0] s_axis_rq_tdata, //O
-		      output [59:0]      s_axis_rq_tuser, //O
-		      output reg [7:0]   s_axis_rq_tkeep, //O
-		      input [3:0]        s_axis_rq_tready, //input from IP. 4bit
-		      output reg         s_axis_rq_tvalid, //O
+		      output reg 				  s_axis_rq_tlast, //O
+		      output reg [255:0] 			  s_axis_rq_tdata, //O
+		      output [59:0] 				  s_axis_rq_tuser, //O
+		      output reg [7:0] 				  s_axis_rq_tkeep, //O
+		      input [3:0] 				  s_axis_rq_tready, //input from IP. 4bit
+		      output reg 				  s_axis_rq_tvalid, //O
 
-		      output reg [255:0] s_axis_cc_tdata,
-		      output reg [32:0]  s_axis_cc_tuser,
-		      output reg         s_axis_cc_tlast,
-		      output reg [7:0]   s_axis_cc_tkeep,
-		      output reg         s_axis_cc_tvalid,
-		      input [3:0]        s_axis_cc_tready,
+		      output reg [255:0] 			  s_axis_cc_tdata,
+		      output reg [32:0] 			  s_axis_cc_tuser,
+		      output reg 				  s_axis_cc_tlast,
+		      output reg [7:0] 				  s_axis_cc_tkeep,
+		      output reg 				  s_axis_cc_tvalid,
+		      input [3:0] 				  s_axis_cc_tready,
    
-		      input              req_compl_i,
-		      output reg         compl_done_o,
+		      input 					  req_compl_i,
+		      output reg 				  compl_done_o,
 
-		      input [2:0]    req_tc_i,
-		      input          req_td_i,
-		      input          req_ep_i,
-		      input [1:0]    req_attr_i,
-		      input [9:0]    req_len_i,
-		      input [15:0]   req_rid_i,
-		      input [7:0]    req_tag_i,
-		      input [7:0]    req_be_i,
-		      input [10:0]   req_addr_i, //It comes from 256_RX. It uses EP_MEM_ACCESS too.		      
+		      input [2:0] 				  req_tc_i,
+		      input 					  req_td_i,
+		      input 					  req_ep_i,
+		      input [1:0] 				  req_attr_i,
+		      input [9:0] 				  req_len_i,
+		      input [15:0] 				  req_rid_i,
+		      input [7:0] 				  req_tag_i,
+		      input [7:0] 				  req_be_i,
+		      input [10:0] 				  req_addr_i, //It comes from 256_RX. It uses EP_MEM_ACCESS too.		      
 
                       // BMD Read Access
-		      output [6:0]   rd_addr_o, //どこにもつながっていないっぽさあある
-		      output [3:0]   rd_be_o,
-		      input  [31:0]  rd_data_i,		     
+		      output [6:0] 				  rd_addr_o, //どこにもつながっていないっぽさあある
+		      output [3:0] 				  rd_be_o,
+		      input [31:0] 				  rd_data_i, 
 
                       // Initiator Reset
-                      input          init_rst_i,
+                      input 					  init_rst_i,
 
                       // Write Initiator
-		      input          mwr_start_i,
-		      input          mwr_int_dis_i,
-		      input  [31:0]  mwr_len_i, //mwr_len_i == mrd_len_i. BMD_EPでそうなっている. wr_d_i[15:0]で決定される.
-		      input  [7:0]   mwr_tag_i,
-		      input  [3:0]   mwr_lbe_i, //set rq_last_be. 4'hF
-		      input  [3:0]   mwr_fbe_i, //set rq_first_be. 4'hF
-		      input  [31:0]  mwr_addr_i, //RXのcq_dataによりこれにinputされるかが決まり, It is used when the rq client circuit makes transaction. It comes from BMD_EP_MEM. it decided at mem_wr_data.
-		      input  [31:0]  mwr_data_i,
-		      input  [31:0]  mwr_count_i, //It comes from BMD_EP_MEM. it decided at mem_wr_data. 
-		      output reg        mwr_done_o,
-		      input  [2:0]   mwr_tlp_tc_i,
-		      input          mwr_64b_en_i,
-		      input          mwr_phant_func_dis1_i,
-		      input  [7:0]   mwr_up_addr_i,
-		      input          mwr_relaxed_order_i,
-		      input          mwr_nosnoop_i,
-		      input  [7:0]   mwr_wrr_cnt_i,
+		      input 					  mwr_start_i,
+		      input 					  mwr_int_dis_i,
+		      input [31:0] 				  mwr_len_i, //mwr_len_i == mrd_len_i. BMD_EPでそうなっている. wr_d_i[15:0]で決定される.
+		      input [7:0] 				  mwr_tag_i,
+		      input [3:0] 				  mwr_lbe_i, //set rq_last_be. 4'hF
+		      input [3:0] 				  mwr_fbe_i, //set rq_first_be. 4'hF
+		      input [31:0] 				  mwr_addr_i, //RXのcq_dataによりこれにinputされるかが決まり, It is used when the rq client circuit makes transaction. It comes from BMD_EP_MEM. it decided at mem_wr_data.
+		      input [31:0] 				  mwr_data_i,
+		      input [31:0] 				  mwr_count_i, //It comes from BMD_EP_MEM. it decided at mem_wr_data. 
+		      output reg 				  mwr_done_o,
+		      input [2:0] 				  mwr_tlp_tc_i,
+		      input 					  mwr_64b_en_i,
+		      input 					  mwr_phant_func_dis1_i,
+		      input [7:0] 				  mwr_up_addr_i,
+		      input 					  mwr_relaxed_order_i,
+		      input 					  mwr_nosnoop_i,
+		      input [7:0] 				  mwr_wrr_cnt_i,
                       
                       // Read Initiator
-		      input          mrd_start_i,
-		      input          mrd_int_dis_i,
-		      input  [31:0]  mrd_len_i,
-		      input  [7:0]   mrd_tag_i,
-		      input  [3:0]   mrd_lbe_i, //set rq_last_be
-		      input  [3:0]   mrd_fbe_i, //set rq_first_be
-		      input  [31:0]  mrd_addr_i,
-		      input  [31:0]  mrd_count_i,
-		      input          mrd_done_i,
-		      input  [2:0]   mrd_tlp_tc_i,
-		      input          mrd_64b_en_i,
-		      input          mrd_phant_func_dis1_i,
-		      input  [7:0]   mrd_up_addr_i,
-		      input          mrd_relaxed_order_i,
-		      input          mrd_nosnoop_i,
-		      input  [7:0]   mrd_wrr_cnt_i,
+		      input 					  mrd_start_i,
+		      input 					  mrd_int_dis_i,
+		      input [31:0] 				  mrd_len_i,
+		      input [7:0] 				  mrd_tag_i,
+		      input [3:0] 				  mrd_lbe_i, //set rq_last_be
+		      input [3:0] 				  mrd_fbe_i, //set rq_first_be
+		      input [31:0] 				  mrd_addr_i,
+		      input [31:0] 				  mrd_count_i,
+		      input 					  mrd_done_i,
+		      input [2:0] 				  mrd_tlp_tc_i,
+		      input 					  mrd_64b_en_i,
+		      input 					  mrd_phant_func_dis1_i,
+		      input [7:0] 				  mrd_up_addr_i,
+		      input 					  mrd_relaxed_order_i,
+		      input 					  mrd_nosnoop_i,
+		      input [7:0] 				  mrd_wrr_cnt_i,
 
-		      output [15:0]  cur_mrd_count_o,
+		      output [15:0] 				  cur_mrd_count_o,
                       
 		      // CN ADDED FOR CS
-		      output [23:0]  cur_wr_count_o, //Never used by all other circuit...?
+		      output [23:0] 				  cur_wr_count_o, //Never used by all other circuit...?
 
-		      input          cfg_msi_enable_i,
-		      output         cfg_interrupt_n_o,
-		      output         cfg_interrupt_assert_n_o,
-		      input          cfg_interrupt_rdy_n_i,
-		      input          cfg_interrupt_legacyclr,
+		      input 					  cfg_msi_enable_i,
+		      output 					  cfg_interrupt_n_o,
+		      output 					  cfg_interrupt_assert_n_o,
+		      input 					  cfg_interrupt_rdy_n_i,
+		      input 					  cfg_interrupt_legacyclr,
 
-		      input [15:0]   completer_id_i,
-		      input          cfg_ext_tag_en_i,
-		      input          cfg_bus_mstr_enable_i,
+		      input [15:0] 				  completer_id_i,
+		      input 					  cfg_ext_tag_en_i,
+		      input 					  cfg_bus_mstr_enable_i,
 
-		      input          cfg_phant_func_en_i,
-		      input [1:0]    cfg_phant_func_supported_i,
+		      input 					  cfg_phant_func_en_i,
+		      input [1:0] 				  cfg_phant_func_supported_i,
 
-		      input          cpld_receive_i, //it comes from rc always of 256_RX. request completed signal.
-		      input          calc_finished,
+		      input 					  cpld_receive_i, //it comes from rc always of 256_RX. request completed signal.
+		      input 					  calc_finished,
 
 		      //old FIFO.
-		      input [255:0]  fifo_read_data,
-		      input          fifo_prog_empty,
-		      output         fifo_read_en,
-		      input          fifo_read_valid,		      
-		      input          fifo_prog_full,
-		      input          fifo_sender_data_prepare_ok,		      
+		      input [255:0] 				  fifo_read_data,
+		      input 					  fifo_prog_empty,
+		      output 					  fifo_read_en,
+		      input 					  fifo_read_valid, 
+		      input 					  fifo_prog_full,
+		      input 					  fifo_sender_data_prepare_ok, 
 		      /*
 		       //build in FIFO. It comes 250MHz.
 		       b_fifo_from_sender_read_data, //input. 256bit.
@@ -136,37 +136,38 @@ module BMD_TX_ENGINE (
 		       */
 
 		      //受信側FPGAでのパケット転送開始信号
-		      input              Receiver_side_trans_start,
+		      input 					  Receiver_side_trans_start,
 
 		      //latency signal
-		      input              latency_reset_signal,
-		      input              latency_data_en,
-		      output reg [ECHO_TRANS_COUNTER_WIDTH - 1:0]  latency_counter, //send to RX_ENGINE. これは送信側FPGAの絶対時刻
+		      input 					  latency_reset_signal,
+		      input 					  latency_data_en,
+		      output reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_counter, //send to RX_ENGINE. これは送信側FPGAの絶対時刻
 
 		      //BRAM
-		      output reg [ECHO_TRANS_COUNTER_WIDTH - 1:0]  bram_wr_data, //send to check_latency. これは送信側FPGAのあるデータの送信時の時刻
-		      output reg         bram_wea,
-		      output reg [12:0]  bram_wr_addr,
+		      output reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_wr_data, //send to check_latency. これは送信側FPGAのあるデータの送信時の時刻
+		      output reg 				  bram_wea,
+		      output reg 				  bram_ena,
+		      output reg [12:0] 			  bram_wr_addr,
 
-		      output reg [31:0]  vio_settings_sender_address_for_sender_out,
-		      output reg         Tlp_stop_interrupt,
+		      output reg [31:0] 			  vio_settings_sender_address_for_sender_out,
+		      output reg 				  Tlp_stop_interrupt,
 
               //count_wait
-              input              fifo_read_trigger,
-              output reg         fifo_counter_read_en,
-              input [ECHO_TRANS_COUNTER_WIDTH - 1:0]       waiting_counter,
-              input [ECHO_TRANS_COUNTER_WIDTH - 1:0]       fifo_counter_value_out,
+		      input 					  fifo_read_trigger,
+		      output reg 				  fifo_counter_read_en,
+		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0] 	  waiting_counter,
+		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0] 	  fifo_counter_value_out,
 
 		      //debug signal
-		      input              m_axis_rc_tlast_i,
-		      input [255:0]      m_axis_rc_tdata_i,
-		      input              m_axis_rc_tvalid_i
+		      input 					  m_axis_rc_tlast_i,
+		      input [255:0] 				  m_axis_rc_tdata_i,
+		      input 					  m_axis_rc_tvalid_i
                       );
 
    //localparameter
    localparam  BRAM_ADDRESS_MAX   = 13'd8191;
    localparam  TAG_FIELD_SIZE     = 4'd8; //タグフィールドのサイズ（5 or 8）
-   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
 
    //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
    assign      FPGA_RECEIVER_SIDE = ( receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0] );
@@ -448,6 +449,7 @@ module BMD_TX_ENGINE (
    reg [9:0]   incr_data_counter;
    
    reg [12:0]  echo_tlp_num;
+   reg [ ECHO_TRANS_COUNTER_WIDTH - 1:0 ] waiting_counter_reg;
    
 
    //local wires
@@ -456,8 +458,18 @@ module BMD_TX_ENGINE (
    
    wire        vio_latency_count_continue;
    wire        vio_echo_mode;
-   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] wait_diff = ( waiting_counter[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 
-                                                        fifo_counter_value_out[ECHO_TRANS_COUNTER_WIDTH - 1:0] ); //受信側FPGAでの待ち時間
+   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] wait_diff = ( waiting_counter_reg[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 
+                                                       fifo_counter_value_out[ECHO_TRANS_COUNTER_WIDTH - 1:0] ); //受信側FPGAでの待ち時間
+
+   //for timing met. regはさんで1クロック遅らせて上記の引き算を行う（引き算はキャリーの伝播で遅延する）
+   always @ ( posedge clk ) begin
+      if ( !rst_n ) begin
+	 waiting_counter_reg <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+      end
+      else begin
+	 waiting_counter_reg <= waiting_counter;
+      end
+   end
    
    
    always @ ( posedge clk ) begin
@@ -499,6 +511,7 @@ module BMD_TX_ENGINE (
          //bram 
          bram_wr_addr       <= 13'd0;
          bram_wea           <= 1'b0;
+         bram_ena           <= 1'b0;
 
          echo_tlp_num       <= 13'd0;
          tag_num            <= 8'd0;
@@ -513,7 +526,8 @@ module BMD_TX_ENGINE (
             incr_data_counter  <= 10'd0;
             echo_tlp_num       <= 13'd0;
             bram_wr_addr       <= 13'd0;
-            bram_wea           <= 1'b1; //これは1にしてresetを行う
+            bram_wea           <= 1'b0;
+            bram_ena           <= 1'b0;
             Tlp_stop_interrupt <= 1'b0;
 
             fifo_counter_read_en <= 1'b0;
@@ -525,6 +539,7 @@ module BMD_TX_ENGINE (
             echo_tlp_num       <= echo_tlp_num  + 1'b1;
          end
          bram_wea <= 1'b0;
+         bram_ena <= 1'b0;
 
 
          if ( fifo_read_en ) begin
@@ -694,6 +709,7 @@ module BMD_TX_ENGINE (
                   mem_writing     <= 1'b0; //これで再びheader送信可能に
                   fifo_reading    <= 1'b0; //FIFOから受信終了
                   bram_wea        <= 1'b1; //BRAMに入れる
+                  bram_ena        <= 1'b1;
 
 		  //                  if ( cur_wr_count == rmwr_count )  begin //rmwr_countはヘッダの送られる最大回数.
                   if ( cur_wr_count[6:0] == 7'b111_1111 ) begin //tag reset 7bitで判断．8bit目はFPGAごとに異なる
@@ -711,22 +727,23 @@ module BMD_TX_ENGINE (
 
                   //LATENCY評価用.
                   if( vio_latency_count_continue ) begin //BRAMに書き続けてチェックするver
-   		     if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
-   			bram_wr_addr   <= 13'd0;
-   		     end
-   		     else begin
-   			bram_wr_addr   <= bram_wr_addr + 1'b1;
-   		     end
-   		  end
-   		  if( !vio_latency_count_continue ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
-   		     if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
-   			bram_wr_addr       <= BRAM_ADDRESS_MAX;
-   			bram_wea           <= 1'b0;
-   			Tlp_stop_interrupt <= 1'b1;
-   		     end
-   		     else begin
-   			bram_wr_addr   <= bram_wr_addr + 1'b1;
-   		     end
+   		               if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
+   			              bram_wr_addr   <= 13'd0;
+   		               end
+   		           else begin
+   			              bram_wr_addr   <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
+   		           end
+   		       end
+   		       if( !vio_latency_count_continue ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
+   		           if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
+   			          bram_wr_addr       <= BRAM_ADDRESS_MAX;
+   			          bram_wea           <= 1'b0;
+                        bram_ena           <= 1'b0;
+   			          Tlp_stop_interrupt <= 1'b1;
+   		           end
+   		           else begin
+   			          bram_wr_addr   <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
+   		           end
    		  end
 
                end
@@ -813,12 +830,12 @@ module BMD_TX_ENGINE (
    // for latency check, TLP送信を開始した時点からの時間を計測．
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
-         bram_wr_data    <= 40'd0;
-         latency_counter <= 40'd0;
+         bram_wr_data    <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_counter <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
       end
       else if( latency_reset_signal ) begin
-         bram_wr_data    <= 40'd0;
-         latency_counter <= 40'd0;
+         bram_wr_data    <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_counter <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
       end
       else if( test_sender_start_vio ) begin //TLP送信かつ，latency測定開始時にカウント開始
          bram_wr_data    <= bram_wr_data + 1'b1;

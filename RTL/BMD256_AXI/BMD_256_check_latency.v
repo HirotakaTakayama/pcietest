@@ -26,6 +26,7 @@ module BMD_256_check_latency
 
 		//write domain, comes from TX_ENGINE
 		input bram_wea, //write enable
+		input bram_ena,
 		input [12:0] bram_wr_addr, //write address
 		input [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_wr_data, //48bit
 
@@ -36,7 +37,7 @@ module BMD_256_check_latency
 		output [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_rd_data
        );
 
-       localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+       localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
 
       /******************************************************/
       //depth1024, write first, Simple Dual-port Block RAM. not common clock.
@@ -51,28 +52,28 @@ module BMD_256_check_latency
       blk_mem_check_latency blk_mem_check_latency
 	(
 	 .clka( clk ),
+	 .ena( bram_ena ),
 	 .wea( bram_wea ), //write enable port A.
 	 .addra( bram_wr_addr ), //13bit //write address
-	 .dina( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
+	 .dina( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //38bit
 
 	 .clkb( clk ),
 	 .rstb( latency_reset_signal ), //reset around latency by VIO
 	 .enb( bram_reb ), /*sender FPGAのRX_ENGINEにデータが来たとき*/
 	 .addrb( bram_rd_addr ), //13bit //read address /* まだrdしていない番地。*/
-	 .doutb( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //40bit
+	 .doutb( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //38bit
 	 );
 
 
       ila_check_bram_access ila_check_bram_access
-		(
-			.clk( clk ),
-			.probe0( bram_wea ), //1bit
-      		.probe1( bram_wr_addr ), //13bit
-      		.probe2( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
-      		.probe3( bram_reb ), //1bit
-      		.probe4( bram_rd_addr ), //13bit
-      		.probe5( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
-      		.probe6( latency_counter[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //40bit
-		);
+	(
+	 .clk( clk ),
+	 .probe0( bram_wea ), //1bit
+      	 .probe1( bram_wr_addr ), //13bit
+      	 .probe2( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //38bit
+      	 .probe3( bram_reb ), //1bit
+      	 .probe4( bram_rd_addr ), //13bit
+      	 .probe5( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //38bit
+	 );
 
 endmodule

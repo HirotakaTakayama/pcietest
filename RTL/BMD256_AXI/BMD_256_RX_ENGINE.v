@@ -142,7 +142,7 @@ module BMD_RX_ENGINE (
    //benchmark param
    localparam THROUGHPUT_100MS       = 32'd25000000; //250MHzだと1clk4nsなので、1秒は250Mclk. 100msは25Mclk.
    localparam BRAM_ADDRESS_MAX       = 13'd8191; //bram depth value 
-   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
    
    assign     cpld_data_err_o        = 1'd0; // no error check
    assign     pcie_cq_np_req         = 1'b1;
@@ -302,8 +302,8 @@ module BMD_RX_ENGINE (
 	 total_DW_count            <= 11'd0;
 
 	 Receiver_side_trans_start <= 1'b0; //not start receive
-     waiting_counter           <= 40'd0;
-     timer_trigger          <= 1'b0;
+	 waiting_counter           <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+	 timer_trigger          <= 1'b0;
       end 
       else begin
 	 wr_en_o                   <= 1'b0;
@@ -317,7 +317,7 @@ module BMD_RX_ENGINE (
 
     //user reset.
     if( latency_reset_signal ) begin
-        waiting_counter        <= 40'd0;
+        waiting_counter        <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
         timer_trigger          <= 1'b0;
     end
     //最初のパケットを受け取ったらカウント開始
@@ -687,6 +687,8 @@ module BMD_RX_ENGINE (
    //Latency check 
    /***************************************************************************************************************************************/
    /***************************************************************************************************************************************/
+   //local regs
+   reg bram_reb_d1;
 
    /***************************/
    //read process of latency BRAM
@@ -696,33 +698,37 @@ module BMD_RX_ENGINE (
       if ( !rst_n ) begin
 	 //bram read domain
 	 bram_reb           <= 1'b0;
+	 bram_reb_d1        <= 1'b0;
 	 bram_rd_addr       <= 13'd0;
       end
       //user reset.
       else if( latency_reset_signal ) begin
 	 //bram read domain
 	 bram_reb           <= 1'b0;
+	 bram_reb_d1        <= 1'b0;
 	 bram_rd_addr       <= 13'd0;
       end
 
       else begin
-	 //reb(read enable) will be asserted, when 送信側FPGAのみBRAMリードを実行 and receive packet coming. 送信側FPGAでBRAMリードを行う．
-	 if( ( m_axis_cq_tdata[31:0] == vio_settings_sender_address_for_sender[31:0] ) && cq_sop ) begin
-	    //bram operation
-	    bram_reb        <= 1'b1;
-	 end
+	       //reb(read enable) will be asserted, when 送信側FPGAのみBRAMリードを実行 and receive packet coming. 送信側FPGAでBRAMリードを行う．
+	       if( ( m_axis_cq_tdata[31:0] == vio_settings_sender_address_for_sender[31:0] ) && cq_sop ) begin
+	           //bram operation
+	           bram_reb        <= 1'b1;
+	       end
 
-	 //rd_enの次のclkでaddressをincr. cq_sopが立つかに依らずアドレス加算はする（else ifとしない）
-	 if( bram_reb ) begin
-	    //bram operation
-	    if( bram_rd_addr == BRAM_ADDRESS_MAX ) begin
-	       bram_rd_addr <= 13'd0;
-	    end
-	    else begin
-	       bram_rd_addr <= bram_rd_addr + 1'b1; //address coorperation
-	    end
-	    bram_reb        <= 1'b0;
-	 end
+	       //rd_enの次のclkでaddressをincr. cq_sopが立つかに依らずアドレス加算はする（else ifとしない）
+	       if( bram_reb ) begin
+	           //bram operation
+	           if( bram_rd_addr == BRAM_ADDRESS_MAX ) begin
+	               bram_rd_addr <= 13'd0;
+	           end
+	       else begin
+	           bram_rd_addr <= bram_rd_addr + 1'b1; //address coorperation
+	       end
+	       bram_reb        <= 1'b0;
+	       end
+
+           bram_reb_d1 <= bram_reb;
       end
 
    end
@@ -743,50 +749,52 @@ module BMD_RX_ENGINE (
 
    reg guarantee_check; //dataが正しいかをチェック
    
-   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result_first = ( latency_counter - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 
-                                                                    fifo_write_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 1'd1 );
-
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result_first;
+   
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
-         latency_d0_in_vio <= 40'd0;
-         latency_d1_in_vio <= 40'd0;
-         latency_d2_in_vio <= 40'd0;
-         latency_d3_in_vio <= 40'd0;
-         latency_d4_in_vio <= 40'd0;
-         latency_d5_in_vio <= 40'd0;
-         latency_d6_in_vio <= 40'd0;
-         latency_d7_in_vio <= 40'd0;
-         latency_d8_in_vio <= 40'd0;
-         latency_d9_in_vio <= 40'd0;
+         latency_d0_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d1_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d2_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d3_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d4_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d5_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d6_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d7_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d8_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d9_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
       end
       else if( latency_reset_signal ) begin
-            latency_d0_in_vio <= 40'd0;
-            latency_d1_in_vio <= 40'd0;
-            latency_d2_in_vio <= 40'd0;
-            latency_d3_in_vio <= 40'd0;
-            latency_d4_in_vio <= 40'd0;
-            latency_d5_in_vio <= 40'd0;
-            latency_d6_in_vio <= 40'd0;
-            latency_d7_in_vio <= 40'd0;
-            latency_d8_in_vio <= 40'd0;
-            latency_d9_in_vio <= 40'd0;
-        end
+         latency_d0_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d1_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d2_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d3_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d4_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d5_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d6_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d7_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d8_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         latency_d9_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+      end
       else begin
-            if( latency_data_en && bram_reb ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
+	 if( latency_data_en && bram_reb ) begin //d1の前に入れておく（タイミングmetのため）
+	    latency_result_first <= ( latency_counter - fifo_write_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 1'd1 );
+	 end
+         else if( latency_data_en && bram_reb_d1 ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
                 case( bram_rd_addr )
-                    13'd0    : latency_d0_in_vio <= latency_result_first;
-                    13'd800  : latency_d1_in_vio <= latency_result_first;
-                    13'd1600 : latency_d2_in_vio <= latency_result_first;
-                    13'd2400 : latency_d3_in_vio <= latency_result_first;
-                    13'd3200 : latency_d4_in_vio <= latency_result_first;
-                    13'd4000 : latency_d5_in_vio <= latency_result_first;
-                    13'd4800 : latency_d6_in_vio <= latency_result_first;
-                    13'd5600 : latency_d7_in_vio <= latency_result_first;
-                    13'd6400 : latency_d8_in_vio <= latency_result_first;
-                    13'd7200 : latency_d9_in_vio <= latency_result_first;
+                    13'd1    : latency_d0_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd801  : latency_d1_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd1601 : latency_d2_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd2401 : latency_d3_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd3201 : latency_d4_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd4001 : latency_d5_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd4801 : latency_d6_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd5601 : latency_d7_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd6401 : latency_d8_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
+                    13'd7201 : latency_d9_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
                     default  : latency_d0_in_vio <= latency_d0_in_vio; //nothing to do
                 endcase // case ( bram_rd_addr )
-            end
+            end // if ( latency_data_en && bram_reb_d1 )
          end
    end // always @ ( posedge clk )
 
@@ -932,15 +940,13 @@ module BMD_RX_ENGINE (
       .probe0( m_axis_cq_tdata ), //256bit
       .probe1( cq_sop ), //1bit
 //      .probe2( cq_receiving ), //1bit
-      .probe2( 1'b0 ), //1bit
-      .probe3( wrDWpacket_num_remaining ), //11bit
-      .probe4( m_axis_cq_tvalid ), //1bit
-      .probe5( m_axis_cq_tready ), //1bit
+      .probe2( wrDWpacket_num_remaining ), //11bit
+      .probe3( m_axis_cq_tvalid ), //1bit
+      .probe4( m_axis_cq_tready ), //1bit
  //     .probe6( m_axis_cq_tkeep ), //8bit
  //     .probe7( m_axis_cq_tlast ), //1bit
-        .probe6( latency_result_first ), //40bit
-        .probe7( latency_d9_in_vio[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
-      .probe8( total_DW_count ) //11bit
+      .probe5( latency_result_first ), //38bit
+      .probe6( total_DW_count ) //11bit
       );
    
 endmodule // BMD_256_RX_ENGINE

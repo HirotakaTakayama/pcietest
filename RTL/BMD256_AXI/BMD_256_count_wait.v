@@ -13,11 +13,11 @@ module BMD_256_count_wait
 		output reg fifo_read_trigger //to TX
 	);
 
-    localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
 
-	wire rst_fifo = ( !rst_n || latency_reset_signal );
-	wire fifo_counter_full; //送信パケット数とdepthサイズを合わせれば，これが最後に立つ
-    wire fifo_counter_empty;
+   wire 		   rst_fifo = ( !rst_n || latency_reset_signal );
+   wire 		   fifo_counter_full; //送信パケット数とdepthサイズを合わせれば，これが最後に立つ
+   wire 		   fifo_counter_empty;
 
 	always @ ( posedge clk ) begin
 		if ( !rst_n ) begin
@@ -37,30 +37,32 @@ module BMD_256_count_wait
     end
 
 
-	fifo_generator_0 fifo_40in40out8192depth
-		(
-			.clk( clk ),
-			.srst( rst_fifo ), 
-			//wr
-			.wr_en( cq_sop ),
-			.din( waiting_counter ), //40bit
+	fifo_generator_0 fifo_38in38out8192depth
+	  (
+	   .clk( clk ),
+	   .srst( rst_fifo ), 
+	   //wr
+	   .wr_en( cq_sop ),
+	   .din( waiting_counter ), //38bit
+	   
+	   //rd
+	   .rd_en( fifo_counter_read_en ), //1bit
+	   .dout( fifo_counter_value_out ), //38bit //O
+	   .full( fifo_counter_full ), //1bit //O
+	   .empty( fifo_counter_empty ) //1bit //O
+	   );
 
-			//rd
-			.rd_en( fifo_counter_read_en ), //1bit
-			.dout( fifo_counter_value_out ), //40bit //O
-			.full( fifo_counter_full ), //1bit //O
-			.empty( fifo_counter_empty ) //1bit //O
-		);
 
-
+   /*
         ila_fifo_check ila_fifo_check (
             .clk( clk ),
             .probe0( cq_sop ), //1bit
-            .probe1( waiting_counter ), //40bit
+            .probe1( waiting_counter ), //38bit
             .probe2( fifo_counter_read_en ), //1bit
-            .probe3( fifo_counter_value_out ), //40bit
+            .probe3( fifo_counter_value_out ), //38bit
             .probe4( fifo_counter_full ), //1bit
             .probe5( fifo_counter_empty ) //1bit
             );
-
+    */
+   
 endmodule

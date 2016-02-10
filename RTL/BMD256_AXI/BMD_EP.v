@@ -516,12 +516,13 @@ module BMD_EP#
       //
       // Local-Link Receive Controller :
       //
-      localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+      localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定(1099秒までカウント可能)
       wire latency_reset_signal;
       wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_counter;
             
       wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_wr_data;
       wire bram_wea;
+      wire bram_ena;
       wire [12:0] bram_wr_addr;
       wire bram_reb;
       wire [12:0] bram_rd_addr;
@@ -764,6 +765,7 @@ module BMD_EP#
 
 			   .bram_wr_data( bram_wr_data ), //O //64bit //send to check_latency. ã“ã‚Œã¯ã‚ã‚‹ãƒ?ãƒ¼ã‚¿ã®é€ä¿¡æ™‚ã?®æ™‚åˆ»
 			   .bram_wea( bram_wea ), //O
+               .bram_ena( bram_ena ), //O
 			   .bram_wr_addr( bram_wr_addr[12:0] ), //O //13bit
 
 			   .Tlp_stop_interrupt( Tlp_stop_interrupt ), //O
@@ -838,6 +840,7 @@ module BMD_EP#
 
 		//write domain, comes from TX_ENGINE
 		.bram_wea( bram_wea ),
+        .bram_ena( bram_ena ),
 		.bram_wr_addr( bram_wr_addr ),
 		.bram_wr_data( bram_wr_data ),
 
