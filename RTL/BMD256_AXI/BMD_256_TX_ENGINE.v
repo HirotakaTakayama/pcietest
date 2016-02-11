@@ -155,8 +155,8 @@ module BMD_TX_ENGINE (
               //count_wait
 		      input 					  fifo_read_trigger,
 		      output reg 				  fifo_counter_read_en,
-		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0] 	  waiting_counter,
-		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0] 	  fifo_counter_value_out,
+		      input [RX_SIDE_WAITING_VALUE - 1:0] 	  waiting_counter,
+		      input [RX_SIDE_WAITING_VALUE - 1:0] 	  fifo_counter_value_out,
 
 		      //debug signal
 		      input 					  m_axis_rc_tlast_i,
@@ -165,10 +165,11 @@ module BMD_TX_ENGINE (
                       );
 
    //localparameter
-   localparam  BRAM_ADDRESS_MAX   = 13'd8191;
-   localparam  TAG_FIELD_SIZE     = 4'd8; //タグフィールドのサイズ（5 or 8）
+   localparam BRAM_ADDRESS_MAX   = 13'd8191;
+   localparam TAG_FIELD_SIZE     = 4'd8; //タグフィールドのサイズ（5 or 8）
    localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
-
+   localparam RX_SIDE_WAITING_VALUE  = 8'd30; //30bitだと4秒ぐらい
+   
    //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
    assign      FPGA_RECEIVER_SIDE = ( receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0] );
 
@@ -449,8 +450,6 @@ module BMD_TX_ENGINE (
    reg [9:0]   incr_data_counter;
    
    reg [12:0]  echo_tlp_num;
-   reg [ ECHO_TRANS_COUNTER_WIDTH - 1:0 ] waiting_counter_reg;
-   
 
    //local wires
    wire [31:0] receiveside_fpga_address;      
@@ -458,19 +457,6 @@ module BMD_TX_ENGINE (
    
    wire        vio_latency_count_continue;
    wire        vio_echo_mode;
-   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] wait_diff = ( waiting_counter_reg[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 
-                                                       fifo_counter_value_out[ECHO_TRANS_COUNTER_WIDTH - 1:0] ); //受信側FPGAでの待ち時間
-
-   //for timing met. regはさんで1クロック遅らせて上記の引き算を行う（引き算はキャリーの伝播で遅延する）
-   always @ ( posedge clk ) begin
-      if ( !rst_n ) begin
-	 waiting_counter_reg <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-      end
-      else begin
-	 waiting_counter_reg <= waiting_counter;
-      end
-   end
-   
    
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
@@ -541,7 +527,28 @@ module BMD_TX_ENGINE (
          bram_wea <= 1'b0;
          bram_ena <= 1'b0;
 
+	 //LATENCY評価用.
+         if( vio_latency_count_continue ) begin //BRAMに書き続けてチェックするver
+   	    if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
+   	       bram_wr_addr   <= 13'd0;
+   	    end
+   	    else begin
+   	       bram_wr_addr   <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
+   	    end
+   	 end
+   	 if( !vio_latency_count_continue ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
+   	    if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
+   	       bram_wr_addr       <= BRAM_ADDRESS_MAX;
+   	       bram_wea           <= 1'b0;
+               bram_ena           <= 1'b0;
+   	       Tlp_stop_interrupt <= 1'b1;
+   	    end
+   	    else begin
+   	       bram_wr_addr   <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
+   	    end
+   	 end
 
+	 
          if ( fifo_read_en ) begin
             fifo_read_count    <= fifo_read_count - 10'd1;
 	 end         
@@ -699,7 +706,7 @@ module BMD_TX_ENGINE (
             //rq_tvalid && rq_treadyの時にデータを送る. treadyはIPが受け付けられる状態かを示す.当然IPからくる.
             if ( s_axis_rq_tready[0] ) begin
 	       //                s_axis_rq_tdata   <= fifo_read_data;
-               s_axis_rq_tdata   <= { 208'd0, wait_diff }; //256bytes{  [パケットを送るときの時間] - [パケットを受け取った時の時間] }
+               s_axis_rq_tdata   <= { 196'd0, waiting_counter[RX_SIDE_WAITING_VALUE - 1:0], fifo_counter_value_out[RX_SIDE_WAITING_VALUE - 1:0] }; //256bytes{  [パケットを送るときの時間] - [パケットを受け取った時の時間] }
                s_axis_rq_tkeep   <= 8'hFF; //all of the data are enabled.
                cur_mwr_dw_count  <= cur_mwr_dw_count - 4'h8; //decrement 256bit(8DW)
 
@@ -723,29 +730,7 @@ module BMD_TX_ENGINE (
                   end
                   if( incr_data_counter != 10'd1023 ) begin
                      incr_data_counter <= incr_data_counter + 1'b1; //data incr
-                  end
-
-                  //LATENCY評価用.
-                  if( vio_latency_count_continue ) begin //BRAMに書き続けてチェックするver
-   		               if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
-   			              bram_wr_addr   <= 13'd0;
-   		               end
-   		           else begin
-   			              bram_wr_addr   <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
-   		           end
-   		       end
-   		       if( !vio_latency_count_continue ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
-   		           if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
-   			          bram_wr_addr       <= BRAM_ADDRESS_MAX;
-   			          bram_wea           <= 1'b0;
-                        bram_ena           <= 1'b0;
-   			          Tlp_stop_interrupt <= 1'b1;
-   		           end
-   		           else begin
-   			          bram_wr_addr   <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
-   		           end
-   		  end
-
+                  end                  
                end
                //まだDWが残っていればtlastはassertされない
                else begin
@@ -852,7 +837,6 @@ module BMD_TX_ENGINE (
    vio_256bit1in_32bit1out_1bit1out vio_addr_sendto_senderfpga
      (
       .clk( clk ),
-      //   .probe_in0( s_axis_rq_tdata ), //256bit //見たいdataをinputに入れる. in this case, I'd like to get requester request make tlp.
       .probe_in0( 1'b0 ),
       .probe_out0( receiveside_fpga_address ),  //32bit //address of receiver side fpga BAR1.
       .probe_out1( test_sender_start_vio ) //1bit //wr tx start signal
@@ -868,7 +852,7 @@ module BMD_TX_ENGINE (
    vio_sender_fpga_address vio_sender_fpga_address
      (
       .clk( clk ),
-      .probe_in0( { 1'b0, echo_tlp_num[12:0] } ), //14bit
+      .probe_in0( echo_tlp_num[12:0] ), //13bit
       .probe_out0( vio_settings_sender_address_for_sender[31:0] ), //32bit //address of sender side fpga BAR1.
       .probe_out1( vio_latency_count_continue ), //1bit //レイテンシチェックを継続して行うか，ちょっとの間だけ行うかを決める.0:継続しない．1:継続してBRAMへ書き込み
       .probe_out2( vio_echo_mode ) //1bit //レイテンシを測るか（受信側FPGAからechoを返すか）どうかを決める.0:echoなし（スループットチェック用）.1:echoあり（レイテンシチェック用）

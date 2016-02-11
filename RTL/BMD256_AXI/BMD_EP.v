@@ -516,24 +516,26 @@ module BMD_EP#
       //
       // Local-Link Receive Controller :
       //
-      localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定(1099秒までカウント可能)
-      wire latency_reset_signal;
-      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_counter;
-            
-      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_wr_data;
-      wire bram_wea;
-      wire bram_ena;
-      wire [12:0] bram_wr_addr;
-      wire bram_reb;
-      wire [12:0] bram_rd_addr;
-      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_rd_data;
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定(1099秒までカウント可能)
+   localparam RX_SIDE_WAITING_VALUE  = 8'd30; //30bitだと4秒ぐらい
+   
+   wire latency_reset_signal;
+   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_counter;
+   
+   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_wr_data;
+   wire 				 bram_wea;
+   wire 				 bram_ena;
+   wire [12:0] 				 bram_wr_addr;
+   wire 				 bram_reb;
+   wire [12:0] 				 bram_rd_addr;
+   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_rd_data;
 
-      wire [31:0] vio_settings_sender_address_for_sender;
-      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] waiting_counter;
-      wire cq_sop_out;
-      wire fifo_counter_read_en;
-      wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] fifo_counter_value_out;
-      wire fifo_read_trigger;
+   wire [31:0] 				 vio_settings_sender_address_for_sender;
+   wire [RX_SIDE_WAITING_VALUE - 1:0] 	 waiting_counter;
+   wire 				 cq_sop_out;
+   wire 				 fifo_counter_read_en;
+   wire [RX_SIDE_WAITING_VALUE - 1:0] 	 fifo_counter_value_out;
+   wire 				 fifo_read_trigger;
 
       BMD_RX_ENGINE EP_RX (  
 			   .clk(clk),                           // I
@@ -831,42 +833,57 @@ module BMD_EP#
   //new module declaration for check latency
   /****************************************************************************************************************/
 
-  BMD_256_check_latency BMD_256_check_latency
-	(
-		.clk( clk ),
-	 	.rst_n( rst_n ),
-	 	.latency_reset_signal( latency_reset_signal ), //comes from RX_ENGINE, user reset.
-	 	.latency_counter( latency_counter ), //I //48bit //come from TX_ENGINE
+   BMD_256_check_latency BMD_256_check_latency
+     (
+      .clk( clk ),
+      .rst_n( rst_n ),
+      .latency_reset_signal( latency_reset_signal ), //comes from RX_ENGINE, user reset.
+      .latency_counter( latency_counter ), //I //48bit //come from TX_ENGINE
 
-		//write domain, comes from TX_ENGINE
-		.bram_wea( bram_wea ),
-        .bram_ena( bram_ena ),
-		.bram_wr_addr( bram_wr_addr ),
-		.bram_wr_data( bram_wr_data ),
+      //write domain, comes from TX_ENGINE
+      .bram_wea( bram_wea ),
+      .bram_ena( bram_ena ),
+      .bram_wr_addr( bram_wr_addr ),
+      .bram_wr_data( bram_wr_data ),
 
-		//read domain, comes from RX_ENGINE
-		.bram_reb( bram_reb ),
-		.bram_rd_addr( bram_rd_addr ),
-		//read domain send to RX_ENGINE
-		.bram_rd_data( bram_rd_data ) //O
-	);
+      //read domain, comes from RX_ENGINE
+      .bram_reb( bram_reb ),
+      .bram_rd_addr( bram_rd_addr ),
+      //read domain send to RX_ENGINE
+      .bram_rd_data( bram_rd_data ) //O
+      );
 
 
 
-	BMD_256_count_wait BMD_256_count_wait
-		(
-			.clk( clk ),
-	 		.rst_n( rst_n ),
-	 		.latency_reset_signal( latency_reset_signal ),
+   BMD_256_count_wait BMD_256_count_wait
+     (
+      .clk( clk ),
+      .rst_n( rst_n ),
+      .latency_reset_signal( latency_reset_signal ),
 
-	 		.cq_sop( cq_sop_out ), //I
-	 		.waiting_counter( waiting_counter ), //I
-	 		
-	 		.fifo_counter_read_en( fifo_counter_read_en ), //I
-	 		.fifo_counter_value_out( fifo_counter_value_out ), //O
+      .cq_sop( cq_sop_out ), //I
+      .waiting_counter( waiting_counter ), //I
+      
+      .fifo_counter_read_en( fifo_counter_read_en ), //I
+      .fifo_counter_value_out( fifo_counter_value_out ), //O
 
-			.fifo_read_trigger( fifo_read_trigger ) //O
-			);
+      .fifo_read_trigger( fifo_read_trigger ) //O
+      );
+
+
+   ila_check_bram_access ila_check_bram_access
+     (
+      .clk( clk ),
+      .probe0( bram_wea ), //1bit
+      .probe1( bram_wr_addr ), //13bit
+      .probe2( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //38bit
+      .probe3( bram_reb ), //1bit
+      .probe4( bram_rd_addr ), //13bit
+      .probe5( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //38bit
+      .probe6( cq_sop_out ), //1bit //cq_sopより1clk遅いのを覚えておく
+      .probe7( m_axis_cq_tdata[157:128] ), //30bit
+      .probe8( m_axis_cq_tdata[187:158] )  //30bit
+      );
 
 endmodule // BMD_EP
 

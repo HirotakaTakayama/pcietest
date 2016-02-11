@@ -65,15 +65,6 @@ module BMD_256_check_latency
 	 );
 
 
-      ila_check_bram_access ila_check_bram_access
-	(
-	 .clk( clk ),
-	 .probe0( bram_wea ), //1bit
-      	 .probe1( bram_wr_addr ), //13bit
-      	 .probe2( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //38bit
-      	 .probe3( bram_reb ), //1bit
-      	 .probe4( bram_rd_addr ), //13bit
-      	 .probe5( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //38bit
-	 );
+     
 
 endmodule

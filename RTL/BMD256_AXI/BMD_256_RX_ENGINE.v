@@ -25,29 +25,29 @@
 `timescale 1ns/1ns
 
 module BMD_RX_ENGINE (
-		      input              clk,
-		      input              rst_n,
+		      input 				       clk,
+		      input 				       rst_n,
 
                       /* Initiator reset */
-		      input              init_rst_i,
+		      input 				       init_rst_i,
 
 		      // Completer Request Interface
-		      input [255:0]      m_axis_cq_tdata,
-		      input 	         m_axis_cq_tlast,
-		      input 	         m_axis_cq_tvalid,
-		      input [84:0]       m_axis_cq_tuser,
-		      input [7:0] 	 m_axis_cq_tkeep,
-		      input [5:0] 	 pcie_cq_np_req_count,
-		      output reg 	 m_axis_cq_tready,
-		      output 	         pcie_cq_np_req,
+		      input [255:0] 			       m_axis_cq_tdata,
+		      input 				       m_axis_cq_tlast,
+		      input 				       m_axis_cq_tvalid,
+		      input [84:0] 			       m_axis_cq_tuser,
+		      input [7:0] 			       m_axis_cq_tkeep,
+		      input [5:0] 			       pcie_cq_np_req_count,
+		      output reg 			       m_axis_cq_tready,
+		      output 				       pcie_cq_np_req,
 
 		      // Requester Completion Interface
-		      input [255:0]      m_axis_rc_tdata,
-		      input 		 m_axis_rc_tlast,
-		      input 		 m_axis_rc_tvalid,
-		      input [7:0]        m_axis_rc_tkeep,
-		      input [74:0] 	 m_axis_rc_tuser,
-		      output reg 	 m_axis_rc_tready,
+		      input [255:0] 			       m_axis_rc_tdata,
+		      input 				       m_axis_rc_tlast,
+		      input 				       m_axis_rc_tvalid,
+		      input [7:0] 			       m_axis_rc_tkeep,
+		      input [74:0] 			       m_axis_rc_tuser,
+		      output reg 			       m_axis_rc_tready,
 
                       /*
                        * Memory Read data handshake with Completion 
@@ -55,20 +55,20 @@ module BMD_RX_ENGINE (
                        * req_compl assertion and responds with compl_done
                        * assertion when a Completion w/ data is transmitted. 
                        */
-		      output reg         req_compl_o,
-		      input              compl_done_i,
+		      output reg 			       req_compl_o,
+		      input 				       compl_done_i,
 
-                      output reg [10:0]  addr_o, //EP_MEM_ACCESS と256_TXにつながっているっぽい // Memory Read Address
+                      output reg [10:0] 		       addr_o, //EP_MEM_ACCESS と256_TXにつながっているっぽい // Memory Read Address
 
 
-		      output reg [2:0]   req_tc_o, // Memory Read TC
-		      output reg         req_td_o, // Memory Read TD
-		      output reg         req_ep_o, // Memory Read EP
-		      output reg [1:0]   req_attr_o, // Memory Read Attribute
-		      output reg [9:0]   req_len_o, // Memory Read Length
-		      output reg [15:0]  req_rid_o, // Memory Read Requestor ID
-		      output reg [7:0]   req_tag_o, // Memory Read Tag
-		      output reg [7:0]   req_be_o, // Memory Read Byte Enables
+		      output reg [2:0] 			       req_tc_o, // Memory Read TC
+		      output reg 			       req_td_o, // Memory Read TD
+		      output reg 			       req_ep_o, // Memory Read EP
+		      output reg [1:0] 			       req_attr_o, // Memory Read Attribute
+		      output reg [9:0] 			       req_len_o, // Memory Read Length
+		      output reg [15:0] 		       req_rid_o, // Memory Read Requestor ID
+		      output reg [7:0] 			       req_tag_o, // Memory Read Tag
+		      output reg [7:0] 			       req_be_o, // Memory Read Byte Enables
 
                       /* 
                        * Memory interface used to save 1 DW data received 
@@ -78,48 +78,48 @@ module BMD_RX_ENGINE (
                        * assertion and asserts wr_busy_i when it is 
                        * processing written information.
                        */
-		      output reg [7:0]   wr_be_o, // Memory Write Byte Enable
-		      output reg [31:0]  wr_data_o, //memory writeで使われる。 // Memory Write Data
-		      output reg         wr_en_o, // Memory Write Enable
-		      input              wr_busy_i, // Memory Write Busy   
+		      output reg [7:0] 			       wr_be_o, // Memory Write Byte Enable
+		      output reg [31:0] 		       wr_data_o, //memory writeで使われる。 // Memory Write Data
+		      output reg 			       wr_en_o, // Memory Write Enable
+		      input 				       wr_busy_i, // Memory Write Busy   
 
                       /* Completion no Data */
-		      output reg [7:0]   cpl_ur_found_o,
-		      output reg [7:0]   cpl_ur_tag_o,
+		      output reg [7:0] 			       cpl_ur_found_o,
+		      output reg [7:0] 			       cpl_ur_tag_o,
 
                       /* Completion with Data */
-		      input  [31:0]      cpld_data_i,
-		      output reg [31:0]  cpld_found_o,
-		      output reg [31:0]  cpld_data_size_o,
-		      output reg         cpld_malformed_o,
-		      output             cpld_data_err_o,
+		      input [31:0] 			       cpld_data_i,
+		      output reg [31:0] 		       cpld_found_o,
+		      output reg [31:0] 		       cpld_data_size_o,
+		      output reg 			       cpld_malformed_o,
+		      output 				       cpld_data_err_o,
 
-                      output reg         cpld_receive_o,
+                      output reg 			       cpld_receive_o,
 
 		      //FIFO
-		      output reg [255:0] fifo_write_data,
-		      output reg         fifo_write_en, //b_fifo_receiver side write enable
+		      output reg [255:0] 		       fifo_write_data,
+		      output reg 			       fifo_write_en, //b_fifo_receiver side write enable
 
 		      //settings for PCIe
-		      input [31:0]       packet_DW_setting,
-		      output reg         Receiver_side_trans_start,
+		      input [31:0] 			       packet_DW_setting,
+		      output reg 			       Receiver_side_trans_start,
 
 		      //latency calc
-		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0]       latency_counter, //come from TX_ENGINE
-		      output reg         latency_reset_signal_out,
-		      output             latency_data_en,
+		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0]   latency_counter, //come from TX_ENGINE
+		      output reg 			       latency_reset_signal_out,
+		      output 				       latency_data_en,
 
-		      input              Tlp_stop_interrupt,
-		      input [31:0]       vio_settings_sender_address_for_sender,
+		      input 				       Tlp_stop_interrupt,
+		      input [31:0] 			       vio_settings_sender_address_for_sender,
 
 		      //bram access
-		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0]       bram_rd_data, //come from check_latency
-		      output reg         bram_reb,
-		      output reg [12:0]  bram_rd_addr,
+		      input [ECHO_TRANS_COUNTER_WIDTH - 1:0]   bram_rd_data, //come from check_latency
+		      output reg 			       bram_reb,
+		      output reg [12:0] 		       bram_rd_addr,
 
-              //time calc fifo access
-              output reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] waiting_counter, //最初のパケットが到達した段階からカウントし始めるカウンタ．echo開始までの時間測定用．
-              output reg cq_sop_out
+		      //time calc fifo access
+		      output reg [RX_SIDE_WAITING_VALUE - 1:0] waiting_counter, //最初のパケットが到達した段階からカウントし始めるカウンタ．echo開始までの時間測定用．
+		      output reg 			       cq_sop_out
 		      );
    //FIFO
    /*
@@ -132,20 +132,21 @@ module BMD_RX_ENGINE (
    //Req type 
    //      localparam PIO_RX_MEM_RD_FMT_TYPE    = 4'b0000;    // Memory Read
    //      localparam PIO_RX_MEM_WR_FMT_TYPE    = 4'b0001;    // Memory Write
-   localparam RX_MEM_RD_FMT_TYPE     = 4'b0000;    // Memory Read
-   localparam RX_MEM_WR_FMT_TYPE     = 4'b0001;    // Memory Write
+   localparam RX_MEM_RD_FMT_TYPE       = 4'b0000;    // Memory Read
+   localparam RX_MEM_WR_FMT_TYPE       = 4'b0001;    // Memory Write
 
-   localparam BMD_256_RX_RST         = 8'b0000_0001;
-   localparam BMD_256_RX_MEM_RD32_WT = 8'b0000_0100;
-   localparam BMD_256_RX_MEM_WR32_WT = 8'b0001_0000;
+   localparam BMD_256_RX_RST           = 8'b0000_0001;
+   localparam BMD_256_RX_MEM_RD32_WT   = 8'b0000_0100;
+   localparam BMD_256_RX_MEM_WR32_WT   = 8'b0001_0000;
 
    //benchmark param
-   localparam THROUGHPUT_100MS       = 32'd25000000; //250MHzだと1clk4nsなので、1秒は250Mclk. 100msは25Mclk.
-   localparam BRAM_ADDRESS_MAX       = 13'd8191; //bram depth value 
+   localparam THROUGHPUT_100MS         = 32'd25000000; //250MHzだと1clk4nsなので、1秒は250Mclk. 100msは25Mclk.
+   localparam BRAM_ADDRESS_MAX         = 13'd8191; //bram depth value 
    localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+   localparam RX_SIDE_WAITING_VALUE    = 8'd30; //30bitだと4秒ぐらい
    
-   assign     cpld_data_err_o        = 1'd0; // no error check
-   assign     pcie_cq_np_req         = 1'b1;
+   assign     cpld_data_err_o          = 1'd0; // no error check
+   assign     pcie_cq_np_req           = 1'b1;
 
    // Local Registers
    reg [7:0]  bmd_256_rx_state;
@@ -302,8 +303,8 @@ module BMD_RX_ENGINE (
 	 total_DW_count            <= 11'd0;
 
 	 Receiver_side_trans_start <= 1'b0; //not start receive
-	 waiting_counter           <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-	 timer_trigger          <= 1'b0;
+	 waiting_counter           <= { RX_SIDE_WAITING_VALUE{1'd0} };
+	 timer_trigger             <= 1'b0;
       end 
       else begin
 	 wr_en_o                   <= 1'b0;
@@ -317,7 +318,7 @@ module BMD_RX_ENGINE (
 
     //user reset.
     if( latency_reset_signal ) begin
-        waiting_counter        <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+        waiting_counter        <= { RX_SIDE_WAITING_VALUE{1'd0} };
         timer_trigger          <= 1'b0;
     end
     //最初のパケットを受け取ったらカウント開始
@@ -387,7 +388,7 @@ module BMD_RX_ENGINE (
 	      //1clk目専用
 	      /////////////////////////
 	      if ( cq_sop ) begin //Completer reQuest start signal ( m_axis_cq_tuser[40](sop)ではだめ)
-            timer_trigger <= 1'b1; //echo用タイマートリガー
+		 timer_trigger <= 1'b1; //echo用タイマートリガー
 
 		 //Memory Read Request //readなら4'b0000
 		 if( m_axis_cq_tdata[78:75] == RX_MEM_RD_FMT_TYPE ) begin 
@@ -710,27 +711,25 @@ module BMD_RX_ENGINE (
       end
 
       else begin
-	       //reb(read enable) will be asserted, when 送信側FPGAのみBRAMリードを実行 and receive packet coming. 送信側FPGAでBRAMリードを行う．
-	       if( ( m_axis_cq_tdata[31:0] == vio_settings_sender_address_for_sender[31:0] ) && cq_sop ) begin
-	           //bram operation
-	           bram_reb        <= 1'b1;
-	       end
-
-	       //rd_enの次のclkでaddressをincr. cq_sopが立つかに依らずアドレス加算はする（else ifとしない）
-	       if( bram_reb ) begin
-	           //bram operation
-	           if( bram_rd_addr == BRAM_ADDRESS_MAX ) begin
-	               bram_rd_addr <= 13'd0;
-	           end
-	       else begin
-	           bram_rd_addr <= bram_rd_addr + 1'b1; //address coorperation
-	       end
-	       bram_reb        <= 1'b0;
-	       end
-
-           bram_reb_d1 <= bram_reb;
+	 //reb(read enable) will be asserted, when 送信側FPGAのみBRAMリードを実行 and receive packet coming. 送信側FPGAでBRAMリードを行う．
+	 if( ( m_axis_cq_tdata[31:0] == vio_settings_sender_address_for_sender[31:0] ) && cq_sop ) begin
+	    //bram operation
+	    bram_reb        <= 1'b1;
+	 end
+	 //rd_enの次のclkでaddressをincr. cq_sopが立つかに依らずアドレス加算はする（else ifとしない）
+	 if( bram_reb ) begin
+	    //bram operation
+	    if( bram_rd_addr == BRAM_ADDRESS_MAX ) begin
+	       bram_rd_addr <= 13'd0;
+	    end
+	    else begin
+	       bram_rd_addr <= bram_rd_addr + 1'b1; //address coorperation
+	    end
+	    bram_reb        <= 1'b0;
+	 end
+	 
+         bram_reb_d1        <= bram_reb;
       end
-
    end
 
    /***************************/
@@ -747,9 +746,12 @@ module BMD_RX_ENGINE (
    reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d8_in_vio;
    reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d9_in_vio;
 
-   reg guarantee_check; //dataが正しいかをチェック
-   
+   reg guarantee_check; //dataが正しいかをチェック   
    reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result_first;
+   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result_b1;
+   
+   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result;
+
    
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
@@ -777,34 +779,37 @@ module BMD_RX_ENGINE (
          latency_d9_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
       end
       else begin
-	 if( latency_data_en && bram_reb ) begin //d1の前に入れておく（タイミングmetのため）
-	    latency_result_first <= ( latency_counter - fifo_write_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] - 1'd1 );
+	 if( latency_data_en && cq_sop ) begin //d1の前に入れておく（タイミングmetのため）//後で-1, /2する	    
+	    latency_result_b1 <= m_axis_cq_tdata[ RX_SIDE_WAITING_VALUE + 157:158] - m_axis_cq_tdata[ RX_SIDE_WAITING_VALUE + 127:128]; //受信側FPGAがパケットを送信側FPGAへechoする時の時間 - 受信側FPGAがパケットを受け取った時間
 	 end
-         else if( latency_data_en && bram_reb_d1 ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
+
+	 if( latency_data_en && bram_reb ) begin
+	    latency_result_first <= ( latency_counter - latency_result_b1 ); //絶対時間 - 受信側FPGAでの待機時間
+	 end
+	
+         if( latency_data_en && bram_reb_d1 ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
                 case( bram_rd_addr )
-                    13'd1    : latency_d0_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd801  : latency_d1_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd1601 : latency_d2_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd2401 : latency_d3_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd3201 : latency_d4_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd4001 : latency_d5_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd4801 : latency_d6_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd5601 : latency_d7_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd6401 : latency_d8_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    13'd7201 : latency_d9_in_vio <= latency_result_first - bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0];
-                    default  : latency_d0_in_vio <= latency_d0_in_vio; //nothing to do
+                  13'd1    : latency_d0_in_vio <= latency_result_first - bram_rd_data;
+                  13'd801  : latency_d1_in_vio <= latency_result_first - bram_rd_data;
+                  13'd1601 : latency_d2_in_vio <= latency_result_first - bram_rd_data;
+                  13'd2401 : latency_d3_in_vio <= latency_result_first - bram_rd_data;
+                  13'd3201 : latency_d4_in_vio <= latency_result_first - bram_rd_data;
+                  13'd4001 : latency_d5_in_vio <= latency_result_first - bram_rd_data;
+                  13'd4801 : latency_d6_in_vio <= latency_result_first - bram_rd_data;
+                  13'd5601 : latency_d7_in_vio <= latency_result_first - bram_rd_data;
+                  13'd6401 : latency_d8_in_vio <= latency_result_first - bram_rd_data;
+                  13'd7201 : latency_d9_in_vio <= latency_result_first - bram_rd_data;
                 endcase // case ( bram_rd_addr )
-            end // if ( latency_data_en && bram_reb_d1 )
-         end
+         end // if ( latency_data_en && bram_reb_d1 )
+      end
    end // always @ ( posedge clk )
 
-
-
+   
    //latencyデータを受け取り、結果をここに突っ込む
    vio_check_latency vio_check_latency
      (
       .clk( clk ),
-      .probe_in0( latency_d0_in_vio ), //40bit(もともとは64bitだったが，timingの都合でサイズを小さくした．これでも24時間以上計測できるから問題なし)
+      .probe_in0( latency_d0_in_vio ), //38bit(もともとは64bitだったが，timingの都合でサイズを小さくした．これでも10分以上計測できるから問題なし)
       .probe_in1( latency_d1_in_vio ),
       .probe_in2( latency_d2_in_vio ),
       .probe_in3( latency_d3_in_vio ),
