@@ -37,7 +37,7 @@ module BMD_256_check_latency
 		output [ECHO_TRANS_COUNTER_WIDTH - 1:0] bram_rd_data
        );
 
-       localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+       localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
 
       /******************************************************/
       //depth1024, write first, Simple Dual-port Block RAM. not common clock.
@@ -55,13 +55,13 @@ module BMD_256_check_latency
 	 .ena( bram_ena ),
 	 .wea( bram_wea ), //write enable port A.
 	 .addra( bram_wr_addr ), //13bit //write address
-	 .dina( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //38bit
+	 .dina( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
 
 	 .clkb( clk ),
 	 .rstb( latency_reset_signal ), //reset around latency by VIO
 	 .enb( bram_reb ), /*sender FPGAのRX_ENGINEにデータが来たとき*/
 	 .addrb( bram_rd_addr ), //13bit //read address /* まだrdしていない番地。*/
-	 .doutb( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //38bit
+	 .doutb( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ) //40bit
 	 );
 
 

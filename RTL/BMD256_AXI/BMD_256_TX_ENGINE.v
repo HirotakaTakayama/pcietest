@@ -167,7 +167,7 @@ module BMD_TX_ENGINE (
    //localparameter
    localparam BRAM_ADDRESS_MAX   = 13'd8191;
    localparam TAG_FIELD_SIZE     = 4'd8; //タグフィールドのサイズ（5 or 8）
-   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
    localparam RX_SIDE_WAITING_VALUE  = 8'd30; //30bitだと4秒ぐらい
    
    //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
@@ -528,24 +528,30 @@ module BMD_TX_ENGINE (
          bram_ena <= 1'b0;
 
 	 //LATENCY評価用.
-         if( vio_latency_count_continue ) begin //BRAMに書き続けてチェックするver
+         if( vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //BRAMに書き続けてチェックするver
    	    if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
-   	       bram_wr_addr   <= 13'd0;
+   	       bram_wr_addr       <= 13'd0;
+	       Tlp_stop_interrupt <= 1'b1;
    	    end
+	    //送信側FPGA,受信側FPGA共に受信側待機時間カウントFIFOを持っており，送信側FPGAのFIFOにもこのデータがたまる．投げた分だけechoされるからfullになり，triggerが立つ．Tlp_stopを解除し，送信側FPGAが再び通信を開始する．
+	    else if( fifo_read_trigger && Tlp_stop_interrupt ) begin
+	       Tlp_stop_interrupt <= 1'b0;
+	    end
    	    else begin
-   	       bram_wr_addr   <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
+   	       bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
    	    end
-   	 end
-   	 if( !vio_latency_count_continue ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
+   	 end // if ( vio_latency_count_continue && !FPGA_RECEIVER_SIDE )
+	 
+   	 if( !vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
    	    if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
    	       bram_wr_addr       <= BRAM_ADDRESS_MAX;
    	       bram_wea           <= 1'b0;
-               bram_ena           <= 1'b0;
+	       bram_ena           <= 1'b0;
    	       Tlp_stop_interrupt <= 1'b1;
    	    end
    	    else begin
-   	       bram_wr_addr   <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
-   	    end
+   	       bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
+   	    end	    
    	 end
 
 	 
@@ -621,10 +627,10 @@ module BMD_TX_ENGINE (
             //receiveside_fpga_address: 受信側FPGA（ここだとecho側FPGAから見た送信側FPGA）のマッピングされたアドレス番地を指定する．TLP送信側FPGAがechoしないようにするために必要．
             //vio_settings_sender_address_for_sender: 送信側FPGAにとっての送信側FPGAのアドレス番地設定．複数のFPGAを使っていても同じ設定となる．
             //receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0], 送信側FPGAがfffffffだとしたら，どのFPGAでもvio_settings_sender_address_for_senderをfffffffとする．
+	    //receiver FPGAからのechoあり.
             if( s_axis_rq_tready[0] && !Tlp_stop_interrupt &&
-            ( test_sender_start_vio ||
-                  ( fifo_read_trigger && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //receiver FPGAからのechoあり
-	       //            if( s_axis_rq_tready[0] && test_sender_start_vio ) begin //receuver FPGAからのechoなし
+            ( ( test_sender_start_vio ) || //送信側FPGAの条件
+                  ( fifo_read_trigger && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //受信側FPGAの条件
 
                cur_wr_count       <= cur_wr_count + 1'b1;
 

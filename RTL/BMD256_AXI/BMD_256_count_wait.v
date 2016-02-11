@@ -13,7 +13,6 @@ module BMD_256_count_wait
 	 output reg 			      fifo_read_trigger //to TX
 	);
    
-   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
    localparam RX_SIDE_WAITING_VALUE    = 8'd30; //30bitだと4秒ぐらい
 
    reg 					      cq_sop_reg;   
@@ -62,7 +61,7 @@ module BMD_256_count_wait
       .clk( clk ),
       .srst( rst_fifo ), 
       //wr
-      .wr_en( cq_sop_reg ),
+      .wr_en( cq_sop_reg && !fifo_counter_full ),
       .din( waiting_counter_reg ), //30bit
       
       //rd

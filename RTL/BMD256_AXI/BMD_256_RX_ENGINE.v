@@ -142,7 +142,7 @@ module BMD_RX_ENGINE (
    //benchmark param
    localparam THROUGHPUT_100MS         = 32'd25000000; //250MHzだと1clk4nsなので、1秒は250Mclk. 100msは25Mclk.
    localparam BRAM_ADDRESS_MAX         = 13'd8191; //bram depth value 
-   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
    localparam RX_SIDE_WAITING_VALUE    = 8'd30; //30bitだと4秒ぐらい
    
    assign     cpld_data_err_o          = 1'd0; // no error check
@@ -789,16 +789,16 @@ module BMD_RX_ENGINE (
 	
          if( latency_data_en && bram_reb_d1 ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
                 case( bram_rd_addr )
-                  13'd1    : latency_d0_in_vio <= latency_result_first - bram_rd_data;
-                  13'd801  : latency_d1_in_vio <= latency_result_first - bram_rd_data;
-                  13'd1601 : latency_d2_in_vio <= latency_result_first - bram_rd_data;
-                  13'd2401 : latency_d3_in_vio <= latency_result_first - bram_rd_data;
-                  13'd3201 : latency_d4_in_vio <= latency_result_first - bram_rd_data;
-                  13'd4001 : latency_d5_in_vio <= latency_result_first - bram_rd_data;
-                  13'd4801 : latency_d6_in_vio <= latency_result_first - bram_rd_data;
-                  13'd5601 : latency_d7_in_vio <= latency_result_first - bram_rd_data;
-                  13'd6401 : latency_d8_in_vio <= latency_result_first - bram_rd_data;
-                  13'd7201 : latency_d9_in_vio <= latency_result_first - bram_rd_data;
+                  13'd401  : latency_d0_in_vio <= latency_result_first - bram_rd_data;
+                  13'd1201 : latency_d1_in_vio <= latency_result_first - bram_rd_data;
+                  13'd2001 : latency_d2_in_vio <= latency_result_first - bram_rd_data;
+                  13'd2801 : latency_d3_in_vio <= latency_result_first - bram_rd_data;
+                  13'd3601 : latency_d4_in_vio <= latency_result_first - bram_rd_data;
+                  13'd4401 : latency_d5_in_vio <= latency_result_first - bram_rd_data;
+                  13'd5201 : latency_d6_in_vio <= latency_result_first - bram_rd_data;
+                  13'd6001 : latency_d7_in_vio <= latency_result_first - bram_rd_data;
+                  13'd6801 : latency_d8_in_vio <= latency_result_first - bram_rd_data;
+                  13'd7601 : latency_d9_in_vio <= latency_result_first - bram_rd_data;
                 endcase // case ( bram_rd_addr )
          end // if ( latency_data_en && bram_reb_d1 )
       end

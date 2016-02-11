@@ -516,7 +516,7 @@ module BMD_EP#
       //
       // Local-Link Receive Controller :
       //
-   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd38; //レイテンシ測定（echo転送）時のカウンタサイズ設定(1099秒までカウント可能)
+   localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定(1099秒までカウント可能)
    localparam RX_SIDE_WAITING_VALUE  = 8'd30; //30bitだと4秒ぐらい
    
    wire latency_reset_signal;
@@ -837,7 +837,7 @@ module BMD_EP#
      (
       .clk( clk ),
       .rst_n( rst_n ),
-      .latency_reset_signal( latency_reset_signal ), //comes from RX_ENGINE, user reset.
+      .latency_reset_signal( latency_reset_signal ), //I //comes from RX_ENGINE, user reset.
       .latency_counter( latency_counter ), //I //48bit //come from TX_ENGINE
 
       //write domain, comes from TX_ENGINE
@@ -859,7 +859,7 @@ module BMD_EP#
      (
       .clk( clk ),
       .rst_n( rst_n ),
-      .latency_reset_signal( latency_reset_signal ),
+      .latency_reset_signal( latency_reset_signal ), //I
 
       .cq_sop( cq_sop_out ), //I
       .waiting_counter( waiting_counter ), //I
@@ -876,10 +876,10 @@ module BMD_EP#
       .clk( clk ),
       .probe0( bram_wea ), //1bit
       .probe1( bram_wr_addr ), //13bit
-      .probe2( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //38bit
+      .probe2( bram_wr_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
       .probe3( bram_reb ), //1bit
       .probe4( bram_rd_addr ), //13bit
-      .probe5( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //38bit
+      .probe5( bram_rd_data[ECHO_TRANS_COUNTER_WIDTH - 1:0] ), //40bit
       .probe6( cq_sop_out ), //1bit //cq_sopより1clk遅いのを覚えておく
       .probe7( m_axis_cq_tdata[157:128] ), //30bit
       .probe8( m_axis_cq_tdata[187:158] )  //30bit
