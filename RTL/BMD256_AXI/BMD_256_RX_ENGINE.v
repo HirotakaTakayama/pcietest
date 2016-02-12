@@ -119,7 +119,10 @@ module BMD_RX_ENGINE (
 
 		      //time calc fifo access
 		      output reg [RX_SIDE_WAITING_VALUE - 1:0] waiting_counter, //最初のパケットが到達した段階からカウントし始めるカウンタ．echo開始までの時間測定用．
-		      output reg 			       cq_sop_out
+		      output reg 			       cq_sop_out,
+		      input 				       fifo_counter_empty,
+
+		      input 				       FPGA_RECEIVER_SIDE //受信側FPGAなら1
 		      );
    //FIFO
    /*
@@ -276,9 +279,9 @@ module BMD_RX_ENGINE (
       if ( !rst_n ) begin
 	 bmd_256_rx_state <= BMD_256_RX_RST;
 	 m_axis_cq_tready <= 1'b1;
-
+	 
 	 req_compl_o      <= 1'b0;
-
+	 
 	 req_tc_o         <= 2'b0;
 	 req_td_o         <= 1'b0;
 	 req_ep_o         <= 1'b0;
@@ -305,27 +308,32 @@ module BMD_RX_ENGINE (
 	 Receiver_side_trans_start <= 1'b0; //not start receive
 	 waiting_counter           <= { RX_SIDE_WAITING_VALUE{1'd0} };
 	 timer_trigger             <= 1'b0;
-      end 
+      end // if ( !rst_n )
+      //user reset.
+      else  if( latency_reset_signal ) begin 
+	 timer_trigger          <= 1'b0;
+         waiting_counter        <= { RX_SIDE_WAITING_VALUE{1'd0} };
+      end
+      
       else begin
 	 wr_en_o                   <= 1'b0;
 	 req_compl_o               <= 1'b0;
 	 m_axis_cq_tready          <= 1'b1; //treadyをassert、assert中はデータを受け付ける
 	 Receiver_side_trans_start <= 1'b0; //not start receive
-
+	 
 	 if ( init_rst_i ) begin
 	    bmd_256_rx_state       <= BMD_256_RX_RST;
 	 end
-
-    //user reset.
-    if( latency_reset_signal ) begin
-        waiting_counter        <= { RX_SIDE_WAITING_VALUE{1'd0} };
-        timer_trigger          <= 1'b0;
-    end
-    //最初のパケットを受け取ったらカウント開始
-    if( timer_trigger ) begin
-        waiting_counter        <= waiting_counter + 1'b1;
-    end
-
+	 
+	 //最初のパケットを受け取るまでは0. 繰り返しをする時にもカウントの初めは0
+	 if( fifo_counter_empty && !timer_trigger ) begin
+	    waiting_counter        <= { RX_SIDE_WAITING_VALUE{1'd0} };
+	 end
+	 //最初のパケットを受け取ったら，受信側FPGAはカウント開始
+	 if( timer_trigger && FPGA_RECEIVER_SIDE ) begin
+            waiting_counter        <= waiting_counter + 1'b1;
+	 end
+	 
 	 case ( bmd_256_rx_state )
 	   BMD_256_RX_RST : begin
 	      /*
@@ -756,15 +764,17 @@ module BMD_RX_ENGINE (
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
          latency_d0_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d1_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d2_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d3_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d4_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+      latency_d1_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+      latency_d2_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+      latency_d3_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+      latency_d4_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
          latency_d5_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
          latency_d6_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
          latency_d7_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
          latency_d8_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
          latency_d9_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+      latency_result_first <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+      latency_result_b1 <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };      
       end
       else if( latency_reset_signal ) begin
          latency_d0_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
@@ -777,17 +787,19 @@ module BMD_RX_ENGINE (
          latency_d7_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
          latency_d8_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
          latency_d9_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+	   latency_result_first <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+	   latency_result_b1 <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };      
       end
       else begin
-	 if( latency_data_en && cq_sop ) begin //d1の前に入れておく（タイミングmetのため）//後で-1, /2する	    
-	    latency_result_b1 <= m_axis_cq_tdata[ RX_SIDE_WAITING_VALUE + 157:158] - m_axis_cq_tdata[ RX_SIDE_WAITING_VALUE + 127:128]; //受信側FPGAがパケットを送信側FPGAへechoする時の時間 - 受信側FPGAがパケットを受け取った時間
-	 end
-
-	 if( latency_data_en && bram_reb ) begin
-	    latency_result_first <= ( latency_counter - latency_result_b1 ); //絶対時間 - 受信側FPGAでの待機時間
-	 end
-	
-         if( latency_data_en && bram_reb_d1 ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
+	 //送信側のみVIOへの格納処理を行う
+	 if( latency_data_en && !FPGA_RECEIVER_SIDE ) begin
+	    if( cq_sop ) begin //d1の前に入れておく（タイミングmetのため）//後で-1, /2する	    
+	       latency_result_b1 <= m_axis_cq_tdata[ RX_SIDE_WAITING_VALUE + 157:158] - m_axis_cq_tdata[ RX_SIDE_WAITING_VALUE + 127:128]; //受信側FPGAがパケットを送信側FPGAへechoする時の時間 - 受信側FPGAがパケットを受け取った時間
+	    end
+	    if( bram_reb ) begin
+	       latency_result_first <= ( latency_counter - latency_result_b1 ); //絶対時間 - 受信側FPGAでの待機時間
+	    end	
+            if( bram_reb_d1 ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
                 case( bram_rd_addr )
                   13'd401  : latency_d0_in_vio <= latency_result_first - bram_rd_data;
                   13'd1201 : latency_d1_in_vio <= latency_result_first - bram_rd_data;
@@ -800,8 +812,9 @@ module BMD_RX_ENGINE (
                   13'd6801 : latency_d8_in_vio <= latency_result_first - bram_rd_data;
                   13'd7601 : latency_d9_in_vio <= latency_result_first - bram_rd_data;
                 endcase // case ( bram_rd_addr )
-         end // if ( latency_data_en && bram_reb_d1 )
-      end
+            end // if ( bram_reb_d1 )
+	 end // if ( latency_data_en && !FPGA_RECEIVER_SIDE )	 
+      end // else: !if( latency_reset_signal )      
    end // always @ ( posedge clk )
 
    
@@ -950,7 +963,7 @@ module BMD_RX_ENGINE (
       .probe4( m_axis_cq_tready ), //1bit
  //     .probe6( m_axis_cq_tkeep ), //8bit
  //     .probe7( m_axis_cq_tlast ), //1bit
-      .probe5( latency_result_first ), //38bit
+      .probe5( latency_result_first ), //40bit
       .probe6( total_DW_count ) //11bit
       );
    

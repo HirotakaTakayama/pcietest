@@ -10,25 +10,24 @@ module BMD_256_count_wait
 	 input 				      fifo_counter_read_en, //from TX
 	 output [RX_SIDE_WAITING_VALUE - 1:0] fifo_counter_value_out,
 
-	 output reg 			      fifo_read_trigger //to TX
+	 output reg 			      fifo_read_trigger, //to TX
+	 output reg 			      fifo_counter_empty_out
 	);
    
    localparam RX_SIDE_WAITING_VALUE    = 8'd30; //30bitだと4秒ぐらい
-
-   reg 					      cq_sop_reg;   
-   reg [RX_SIDE_WAITING_VALUE - 1:0] waiting_counter_reg;
    
 	   
    wire 			     rst_fifo = ( !rst_n || latency_reset_signal );
    wire 			     fifo_counter_full; //送信パケット数とdepthサイズを合わせれば，これが最後に立つ
    wire 			     fifo_counter_empty;
+   wire [12:0]			     fifo_count;
    
    //read trigger change
    always @ ( posedge clk ) begin
       if ( !rst_n ) begin
 	 fifo_read_trigger <= 1'b0;
       end
-      if( latency_reset_signal ) begin
+      else if( latency_reset_signal ) begin
 	 fifo_read_trigger <= 1'b0;
       end
       else begin
@@ -42,27 +41,28 @@ module BMD_256_count_wait
    end // always @ ( posedge clk )
 
 
-   
-   //入力前のbuffer
-   always @ ( posedge clk ) begin
-      if ( !rst_n ) begin
-	 cq_sop_reg          <= 1'b0;
-	 waiting_counter_reg <= { RX_SIDE_WAITING_VALUE{1'b0} };	 
+   always @( posedge clk ) begin
+      if( !rst_n ) begin
+	 fifo_counter_empty_out <= 1'b0; 
+      end
+      else if( latency_reset_signal ) begin
+	 fifo_counter_empty_out <= 1'b0; 
       end
       else begin
-	 cq_sop_reg <= cq_sop;
-	 waiting_counter_reg <= waiting_counter;	 
+	 fifo_counter_empty_out <= fifo_counter_empty;	 
       end
-   end  
+   end
 
 
    fifo_generator_0 fifo_30in30out8192depth
      (
       .clk( clk ),
-      .srst( rst_fifo ), 
+      .srst( rst_fifo ),
+
+      .data_count( fifo_count ), //13bit
       //wr
-      .wr_en( cq_sop_reg && !fifo_counter_full ),
-      .din( waiting_counter_reg ), //30bit
+      .wr_en( cq_sop && !fifo_counter_full ),
+      .din( waiting_counter ), //30bit
       
       //rd
       .rd_en( fifo_counter_read_en ), //1bit
@@ -72,16 +72,18 @@ module BMD_256_count_wait
       );
 
 
-   /*
-        ila_fifo_check ila_fifo_check (
-            .clk( clk ),
-            .probe0( cq_sop ), //1bit
-            .probe1( waiting_counter ), //38bit
-            .probe2( fifo_counter_read_en ), //1bit
-            .probe3( fifo_counter_value_out ), //38bit
-            .probe4( fifo_counter_full ), //1bit
-            .probe5( fifo_counter_empty ) //1bit
-            );
-    */
+   
+   ila_fifo_check ila_fifo_check 
+     (
+      .clk( clk ),
+      .probe0( cq_sop ), //1bit
+      .probe1( waiting_counter ), //30bit
+      .probe2( fifo_counter_read_en ), //1bit
+      .probe3( fifo_counter_value_out ), //30bit
+      .probe4( fifo_counter_full ), //1bit
+      .probe5( fifo_counter_empty ), //1bit
+      .probe6( fifo_count ) //13bit
+      );
+   
    
 endmodule

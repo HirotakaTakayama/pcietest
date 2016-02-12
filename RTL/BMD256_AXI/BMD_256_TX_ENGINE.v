@@ -152,12 +152,14 @@ module BMD_TX_ENGINE (
 		      output reg [31:0] 			  vio_settings_sender_address_for_sender_out,
 		      output reg 				  Tlp_stop_interrupt,
 
-              //count_wait
+		      //count_wait
 		      input 					  fifo_read_trigger,
 		      output reg 				  fifo_counter_read_en,
 		      input [RX_SIDE_WAITING_VALUE - 1:0] 	  waiting_counter,
 		      input [RX_SIDE_WAITING_VALUE - 1:0] 	  fifo_counter_value_out,
 
+		      output reg 				  FPGA_RECEIVER_SIDE_out,
+		      
 		      //debug signal
 		      input 					  m_axis_rc_tlast_i,
 		      input [255:0] 				  m_axis_rc_tdata_i,
@@ -165,12 +167,12 @@ module BMD_TX_ENGINE (
                       );
 
    //localparameter
-   localparam BRAM_ADDRESS_MAX   = 13'd8191;
-   localparam TAG_FIELD_SIZE     = 4'd8; //タグフィールドのサイズ（5 or 8）
+   localparam BRAM_ADDRESS_MAX         = 13'd8191;
+   localparam TAG_FIELD_SIZE           = 4'd8; //タグフィールドのサイズ（5 or 8）
    localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
-   localparam RX_SIDE_WAITING_VALUE  = 8'd30; //30bitだと4秒ぐらい
+   localparam RX_SIDE_WAITING_VALUE    = 8'd30; //30bitだと4秒ぐらい
    
-   //受信側FPGAの番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
+   //受信側FPGAのBAR1マッピング番地が送信側FPGAの番地であれば（つまり，受信側FPGAからechoを返す時にだけ一致する）
    assign      FPGA_RECEIVER_SIDE = ( receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0] );
 
    /* Present address and byte enable to memory module */
@@ -312,6 +314,14 @@ module BMD_TX_ENGINE (
         end
     end
 
+   always @( posedge clk ) begin
+      if( !rst_n ) begin
+	 FPGA_RECEIVER_SIDE_out <= 1'b0;	 
+      end
+      else begin
+	 FPGA_RECEIVER_SIDE_out <= FPGA_RECEIVER_SIDE;	 
+      end
+   end
 
    /* Interrupt Controller */
    BMD_INTR_CTRL BMD_INTR_CTRL  (
@@ -499,73 +509,28 @@ module BMD_TX_ENGINE (
          bram_wea           <= 1'b0;
          bram_ena           <= 1'b0;
 
-         echo_tlp_num       <= 13'd0;
-         tag_num            <= 8'd0;
+         echo_tlp_num       <= 13'd0;         
          Tlp_stop_interrupt <= 1'b0;
+	 tag_num            <= 8'd0;
 
          fifo_counter_read_en <= 1'b0;
-      end
-
+      end // if ( !rst_n )      
+      //user reset
+      else if( latency_reset_signal ) begin
+         incr_data_counter  <= 10'd0;
+         echo_tlp_num       <= 13'd0;
+         bram_wr_addr       <= 13'd0;
+         bram_wea           <= 1'b0;
+         bram_ena           <= 1'b0;	 
+         Tlp_stop_interrupt <= 1'b0;
+	 tag_num            <= 8'd0;
+	 
+         fifo_counter_read_en <= 1'b0;
+         cur_wr_count       <= 24'd0; //tag
+      end // if ( latency_reset_signal )
+      
       else begin // if (!rst_n )
-         //user reset
-         if( latency_reset_signal ) begin
-            incr_data_counter  <= 10'd0;
-            echo_tlp_num       <= 13'd0;
-            bram_wr_addr       <= 13'd0;
-            bram_wea           <= 1'b0;
-            bram_ena           <= 1'b0;
-            Tlp_stop_interrupt <= 1'b0;
-
-            fifo_counter_read_en <= 1'b0;
-            cur_wr_count       <= 24'd0; //tag
-         end
-
-         //受信側FPGAから送るパケット数をカウント, 受信側FPGAのみで動作
-         if( Receiver_side_trans_start && FPGA_RECEIVER_SIDE ) begin
-            echo_tlp_num       <= echo_tlp_num  + 1'b1;
-         end
-         bram_wea <= 1'b0;
-         bram_ena <= 1'b0;
-
-	 //LATENCY評価用.
-         if( vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //BRAMに書き続けてチェックするver
-   	    if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
-   	       bram_wr_addr       <= 13'd0;
-	       Tlp_stop_interrupt <= 1'b1;
-   	    end
-	    //送信側FPGA,受信側FPGA共に受信側待機時間カウントFIFOを持っており，送信側FPGAのFIFOにもこのデータがたまる．投げた分だけechoされるからfullになり，triggerが立つ．Tlp_stopを解除し，送信側FPGAが再び通信を開始する．
-	    else if( fifo_read_trigger && Tlp_stop_interrupt ) begin
-	       Tlp_stop_interrupt <= 1'b0;
-	    end
-   	    else begin
-   	       bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
-   	    end
-   	 end // if ( vio_latency_count_continue && !FPGA_RECEIVER_SIDE )
-	 
-   	 if( !vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
-   	    if( bram_wr_addr == BRAM_ADDRESS_MAX ) begin
-   	       bram_wr_addr       <= BRAM_ADDRESS_MAX;
-   	       bram_wea           <= 1'b0;
-	       bram_ena           <= 1'b0;
-   	       Tlp_stop_interrupt <= 1'b1;
-   	    end
-   	    else begin
-   	       bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移
-   	    end	    
-   	 end
-
-	 
-         if ( fifo_read_en ) begin
-            fifo_read_count    <= fifo_read_count - 10'd1;
-	 end         
-         if ( fifo_read_en && fifo_read_count == 10'd1 ) begin
-            fifo_reading       <= 1'b0;
-	 end
-         if ( cpld_receive_i ) begin
-            request_count      <= request_count - 4'd1;
-	 end
-         
-         if ( init_rst_i ) begin
+	 if ( init_rst_i ) begin
             s_axis_rq_tdata    <= 256'b0;
             s_axis_rq_tkeep    <= 8'b0;
             s_axis_rq_tlast    <= 1'b0;
@@ -596,7 +561,49 @@ module BMD_TX_ENGINE (
 
             mem_writing        <= 1'b0;
             request_count      <= 4'd0;
+         end // if ( init_rst_i )	          
+	 
+         //受信側FPGAから送るパケット数をカウント, 受信側FPGAのみで動作
+         if( Receiver_side_trans_start && FPGA_RECEIVER_SIDE ) begin
+            echo_tlp_num       <= echo_tlp_num  + 1'b1;
          end
+         bram_wea <= 1'b0;
+         bram_ena <= 1'b0;
+
+	 //LATENCY評価用.
+         if( vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //BRAMに書き続けてチェックするver
+   	    if( bram_wr_addr == BRAM_ADDRESS_MAX && mem_writing ) begin
+   	       bram_wr_addr       <= 13'd0;
+	       Tlp_stop_interrupt <= 1'b1;
+   	    end
+	    //送信側FPGA,受信側FPGA共に受信側待機時間カウントFIFOを持っており，送信側FPGAのFIFOにもこのデータがたまる．投げた分だけechoされるからfullになり，triggerが立つ．Tlp_stopを解除し，送信側FPGAが再び通信を開始する．
+	    if( fifo_read_trigger && Tlp_stop_interrupt ) begin
+	       Tlp_stop_interrupt <= 1'b0;
+	    end   	    
+   	    bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移   	    
+   	 end // if ( vio_latency_count_continue && !FPGA_RECEIVER_SIDE )
+	 
+   	 if( !vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
+   	    if( bram_wr_addr == BRAM_ADDRESS_MAX && mem_writing ) begin
+   	       bram_wr_addr       <= BRAM_ADDRESS_MAX;
+   	       bram_wea           <= 1'b0;
+	       bram_ena           <= 1'b0;
+   	       Tlp_stop_interrupt <= 1'b1;
+   	    end
+   	    bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移   	    	    
+   	 end
+
+	 
+         if ( fifo_read_en ) begin
+            fifo_read_count    <= fifo_read_count - 10'd1;
+	 end         
+         if ( fifo_read_en && fifo_read_count == 10'd1 ) begin
+            fifo_reading       <= 1'b0;
+	 end
+         if ( cpld_receive_i ) begin
+            request_count      <= request_count - 4'd1;
+	 end         
+         
          
          mwr_len_byte         <= 4 * mwr_len_i[10:0]; //change to Byte unit
          mrd_len_byte         <= 4 * mrd_len_i[10:0]; //change to Byte unit
@@ -629,7 +636,7 @@ module BMD_TX_ENGINE (
             //receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0], 送信側FPGAがfffffffだとしたら，どのFPGAでもvio_settings_sender_address_for_senderをfffffffとする．
 	    //receiver FPGAからのechoあり.
             if( s_axis_rq_tready[0] && !Tlp_stop_interrupt &&
-            ( ( test_sender_start_vio ) || //送信側FPGAの条件
+            ( ( test_sender_start_vio && !FPGA_RECEIVER_SIDE ) || //送信側FPGAの条件
                   ( fifo_read_trigger && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //受信側FPGAの条件
 
                cur_wr_count       <= cur_wr_count + 1'b1;
@@ -641,18 +648,14 @@ module BMD_TX_ENGINE (
 
 	       //tagの設定を変えて，送信側と受信側でタグ番号が被らないようにする．　こうすれば詰まらないと想定した //bram domain
                if( FPGA_RECEIVER_SIDE ) begin
-                  tag_offset      <= 1'b0;
                   echo_tlp_num    <= echo_tlp_num - 1'b1; //減算
-               end
-               else if( !FPGA_RECEIVER_SIDE ) begin //receiver_FPGA
-                  tag_offset      <= 1'b1;
                end
                
                if( TAG_FIELD_SIZE == 4'd8 ) begin //拡張タグフィールド
-                    tag_num       = { cur_wr_count[6:0], tag_offset }; //tagの値
+                    tag_num       = { cur_wr_count[6:0], FPGA_RECEIVER_SIDE }; //tagの値, offset
                end
                else if( TAG_FIELD_SIZE == 4'd5 ) begin //通常タグフィールド
-                    tag_num       = { 3'd0, cur_wr_count[3:0], tag_offset }; //tagの値
+                    tag_num       = { 3'd0, cur_wr_count[3:0], !FPGA_RECEIVER_SIDE }; //tagの値, offset
                end
                
                //Requester Requestからデータを発行するためのヘッダ, ここの指定を変えればFPGAからのアクセスになるはず。後々はこれを残しつつFPGAからのアクセスも送れるようにする                  
@@ -685,7 +688,7 @@ module BMD_TX_ENGINE (
                cur_mwr_dw_count <= mwr_len_i[9:0]; //DWord Countが設定される
                mem_writing      <= 1'b1;
 
-               fifo_counter_read_en <= ( fifo_read_trigger && FPGA_RECEIVER_SIDE && vio_echo_mode );
+               fifo_counter_read_en <= ( fifo_read_trigger && vio_echo_mode );
             end
 
 
@@ -721,8 +724,11 @@ module BMD_TX_ENGINE (
                   s_axis_rq_tlast <= 1'b1; //transaction 終了信号
                   mem_writing     <= 1'b0; //これで再びheader送信可能に
                   fifo_reading    <= 1'b0; //FIFOから受信終了
-                  bram_wea        <= 1'b1; //BRAMに入れる
-                  bram_ena        <= 1'b1;
+		  
+		  if( !FPGA_RECEIVER_SIDE ) begin //送信側はBRAMに入れる処理をする
+                     bram_wea        <= 1'b1; //BRAMに入れる
+                     bram_ena        <= 1'b1;
+		  end
 
 		  //                  if ( cur_wr_count == rmwr_count )  begin //rmwr_countはヘッダの送られる最大回数.
                   if ( cur_wr_count[6:0] == 7'b111_1111 ) begin //tag reset 7bitで判断．8bit目はFPGAごとに異なる

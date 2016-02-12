@@ -536,7 +536,9 @@ module BMD_EP#
    wire 				 fifo_counter_read_en;
    wire [RX_SIDE_WAITING_VALUE - 1:0] 	 fifo_counter_value_out;
    wire 				 fifo_read_trigger;
-
+   wire 				 FPGA_RECEIVER_SIDE;   
+   wire 				 fifo_counter_empty;
+   
       BMD_RX_ENGINE EP_RX (  
 			   .clk(clk),                           // I
 			   .rst_n(rst_n),                       // I
@@ -615,9 +617,11 @@ module BMD_EP#
 			   .Tlp_stop_interrupt( Tlp_stop_interrupt ), //I
 			   .vio_settings_sender_address_for_sender( vio_settings_sender_address_for_sender[31:0] ), //I
 
-			   .waiting_counter( waiting_counter ), //O
-			   .cq_sop_out( cq_sop_out ) //O
-
+			     .waiting_counter( waiting_counter ), //O
+			     .cq_sop_out( cq_sop_out ), //O
+			     .fifo_counter_empty( fifo_counter_empty ), //I
+			     
+			     .FPGA_RECEIVER_SIDE( FPGA_RECEIVER_SIDE ) //I
 			   );
 
       
@@ -767,7 +771,7 @@ module BMD_EP#
 
 			   .bram_wr_data( bram_wr_data ), //O //64bit //send to check_latency. ã“ã‚Œã¯ã‚ã‚‹ãƒ?ãƒ¼ã‚¿ã®é€ä¿¡æ™‚ã?®æ™‚åˆ»
 			   .bram_wea( bram_wea ), //O
-               .bram_ena( bram_ena ), //O
+			   .bram_ena( bram_ena ), //O
 			   .bram_wr_addr( bram_wr_addr[12:0] ), //O //13bit
 
 			   .Tlp_stop_interrupt( Tlp_stop_interrupt ), //O
@@ -776,9 +780,11 @@ module BMD_EP#
 			   //count_wait
 			   .fifo_counter_read_en( fifo_counter_read_en ), //O
 			   .fifo_read_trigger( fifo_read_trigger ), //I
-               .fifo_counter_value_out( fifo_counter_value_out ), //I
-               .waiting_counter( waiting_counter ), //I
+			   .fifo_counter_value_out( fifo_counter_value_out ), //I
+			   .waiting_counter( waiting_counter ), //I
 
+			   .FPGA_RECEIVER_SIDE_out( FPGA_RECEIVER_SIDE ), //O
+			   
 			   //debug signal
 			   .m_axis_rc_tdata_i(m_axis_rc_tdata),
 			   .m_axis_rc_tlast_i(m_axis_rc_tlast),
@@ -867,7 +873,8 @@ module BMD_EP#
       .fifo_counter_read_en( fifo_counter_read_en ), //I
       .fifo_counter_value_out( fifo_counter_value_out ), //O
 
-      .fifo_read_trigger( fifo_read_trigger ) //O
+      .fifo_read_trigger( fifo_read_trigger ), //O
+      .fifo_counter_empty_out( fifo_counter_empty ) //O
       );
 
 
