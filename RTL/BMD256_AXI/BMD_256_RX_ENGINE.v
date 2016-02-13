@@ -324,14 +324,16 @@ module BMD_RX_ENGINE (
 	 if ( init_rst_i ) begin
 	    bmd_256_rx_state       <= BMD_256_RX_RST;
 	 end
-	 
-	 //最初のパケットを受け取るまでは0. 繰り返しをする時にもカウントの初めは0
-	 if( fifo_counter_empty && !timer_trigger ) begin
-	    waiting_counter        <= { RX_SIDE_WAITING_VALUE{1'd0} };
+	 	 
+	 if( FPGA_RECEIVER_SIDE ) begin
+	    //最初のパケットを受け取るまでは0. 繰り返しをする時にもカウントの初めは0
+	    if( fifo_counter_empty && !timer_trigger ) begin
+	       waiting_counter        <= { RX_SIDE_WAITING_VALUE{1'd0} };
 	 end
-	 //最初のパケットを受け取ったら，受信側FPGAはカウント開始
-	 if( timer_trigger && FPGA_RECEIVER_SIDE ) begin
-            waiting_counter        <= waiting_counter + 1'b1;
+	    //最初のパケットを受け取ったら，受信側FPGAはカウント開始
+	    else if( timer_trigger ) begin
+               waiting_counter        <= waiting_counter + 1'b1;
+	    end
 	 end
 	 
 	 case ( bmd_256_rx_state )

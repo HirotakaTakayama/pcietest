@@ -159,6 +159,8 @@ module BMD_TX_ENGINE (
 		      input [RX_SIDE_WAITING_VALUE - 1:0] 	  fifo_counter_value_out,
 
 		      output reg 				  FPGA_RECEIVER_SIDE_out,
+		      input 					  fifo_counter_empty_wire,
+		      input 					  fifo_counter_full,
 		      
 		      //debug signal
 		      input 					  m_axis_rc_tlast_i,
@@ -572,12 +574,12 @@ module BMD_TX_ENGINE (
 
 	 //LATENCY評価用.
          if( vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //BRAMに書き続けてチェックするver
-   	    if( bram_wr_addr == BRAM_ADDRESS_MAX && mem_writing ) begin
+   	    if( bram_wr_addr == BRAM_ADDRESS_MAX && mem_writing ) begin //一定数送信したら待機
    	       bram_wr_addr       <= 13'd0;
 	       Tlp_stop_interrupt <= 1'b1;
    	    end
-	    //送信側FPGA,受信側FPGA共に受信側待機時間カウントFIFOを持っており，送信側FPGAのFIFOにもこのデータがたまる．投げた分だけechoされるからfullになり，triggerが立つ．Tlp_stopを解除し，送信側FPGAが再び通信を開始する．
-	    if( fifo_read_trigger && Tlp_stop_interrupt ) begin
+	    //送信側FPGA,受信側FPGA共に受信側待機時間カウントFIFOを持っており，送信側FPGAのFIFOにもこのデータがたまる．投げた分だけechoされるから，最終的にFIFOがfullになり，triggerが立つ．Tlp_stopを解除し，送信側FPGAが再び通信を開始する．
+	    if( fifo_counter_full && Tlp_stop_interrupt ) begin
 	       Tlp_stop_interrupt <= 1'b0;
 	    end   	    
    	    bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移   	    
@@ -635,9 +637,9 @@ module BMD_TX_ENGINE (
             //vio_settings_sender_address_for_sender: 送信側FPGAにとっての送信側FPGAのアドレス番地設定．複数のFPGAを使っていても同じ設定となる．
             //receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0], 送信側FPGAがfffffffだとしたら，どのFPGAでもvio_settings_sender_address_for_senderをfffffffとする．
 	    //receiver FPGAからのechoあり.
-            if( s_axis_rq_tready[0] && !Tlp_stop_interrupt &&
-            ( ( test_sender_start_vio && !FPGA_RECEIVER_SIDE ) || //送信側FPGAの条件
-                  ( fifo_read_trigger && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //受信側FPGAの条件
+            if( s_axis_rq_tready[0] && 
+		( ( test_sender_start_vio && !Tlp_stop_interrupt && !FPGA_RECEIVER_SIDE ) || //送信側FPGAの条件
+                  ( fifo_read_trigger && !fifo_counter_empty_wire && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //受信側FPGAの条件
 
                cur_wr_count       <= cur_wr_count + 1'b1;
 

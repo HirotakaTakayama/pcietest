@@ -538,7 +538,10 @@ module BMD_EP#
    wire 				 fifo_read_trigger;
    wire 				 FPGA_RECEIVER_SIDE;   
    wire 				 fifo_counter_empty;
+   wire 				 fifo_counter_empty_wire;   
+   wire 				 fifo_counter_full;
    
+       
       BMD_RX_ENGINE EP_RX (  
 			   .clk(clk),                           // I
 			   .rst_n(rst_n),                       // I
@@ -784,7 +787,8 @@ module BMD_EP#
 			   .waiting_counter( waiting_counter ), //I
 
 			   .FPGA_RECEIVER_SIDE_out( FPGA_RECEIVER_SIDE ), //O
-			   
+			   .fifo_counter_empty_wire( fifo_counter_empty_wire ), //I
+			   .fifo_counter_full( fifo_counter_full ), //I
 			   //debug signal
 			   .m_axis_rc_tdata_i(m_axis_rc_tdata),
 			   .m_axis_rc_tlast_i(m_axis_rc_tlast),
@@ -874,7 +878,9 @@ module BMD_EP#
       .fifo_counter_value_out( fifo_counter_value_out ), //O
 
       .fifo_read_trigger( fifo_read_trigger ), //O
-      .fifo_counter_empty_out( fifo_counter_empty ) //O
+      .fifo_counter_empty_out( fifo_counter_empty ), //O
+      .fifo_counter_empty_wire( fifo_counter_empty_wire ), //O
+      .fifo_counter_full_out( fifo_counter_full ) //O
       );
 
 
