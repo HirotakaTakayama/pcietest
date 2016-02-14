@@ -170,7 +170,7 @@ module BMD_TX_ENGINE (
 
    //localparameter
    localparam BRAM_ADDRESS_MAX         = 13'd8191;
-   localparam TAG_FIELD_SIZE           = 4'd8; //タグフィールドのサイズ（5 or 8）
+   localparam TAG_FIELD_SIZE           = 4'd5; //タグフィールドのサイズ（5 or 8）
    localparam ECHO_TRANS_COUNTER_WIDTH = 8'd40; //レイテンシ測定（echo転送）時のカウンタサイズ設定
    localparam RX_SIDE_WAITING_VALUE    = 8'd30; //30bitだと4秒ぐらい
    
@@ -638,7 +638,8 @@ module BMD_TX_ENGINE (
             //receiveside_fpga_address == vio_settings_sender_address_for_sender[31:0], 送信側FPGAがfffffffだとしたら，どのFPGAでもvio_settings_sender_address_for_senderをfffffffとする．
 	    //receiver FPGAからのechoあり.
             if( s_axis_rq_tready[0] && 
-		( ( test_sender_start_vio && !Tlp_stop_interrupt && !FPGA_RECEIVER_SIDE ) || //送信側FPGAの条件
+		( 
+		( ( test_sender_start_vio && !Tlp_stop_interrupt && !FPGA_RECEIVER_SIDE ) || ( test_sender_start_vio && !vio_echo_mode ) ) || //送信側FPGAの条件(左辺がレイテンシ測定用，右辺がスループット測定用)
                   ( fifo_read_trigger && !fifo_counter_empty_wire && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //受信側FPGAの条件
 
                cur_wr_count       <= cur_wr_count + 1'b1;
