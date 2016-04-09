@@ -756,68 +756,63 @@ module BMD_RX_ENGINE (
    reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d8_in_vio;
    reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_d9_in_vio;
 
-   reg guarantee_check; //dataが正しいかをチェック   
-   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result_first;
-   reg [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result_b1;
+   reg [13:0] counter_for_latency_store;
    
-   wire [ECHO_TRANS_COUNTER_WIDTH - 1:0] latency_result;
+	always @ ( posedge clk ) begin
+		if( latency_reset_signal ) begin
+        	latency_d0_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d1_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d2_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d3_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d4_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d5_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d6_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d7_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d8_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
+         	latency_d9_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
 
-   
-   always @ ( posedge clk ) begin
-      if ( !rst_n ) begin
-         latency_d0_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-      latency_d1_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-      latency_d2_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-      latency_d3_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-      latency_d4_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d5_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d6_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d7_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d8_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d9_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-      latency_result_first <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-      latency_result_b1 <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };      
-      end
-      else if( latency_reset_signal ) begin
-         latency_d0_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d1_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d2_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d3_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d4_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d5_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d6_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d7_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d8_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-         latency_d9_in_vio <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-	   latency_result_first <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };
-	   latency_result_b1 <= { ECHO_TRANS_COUNTER_WIDTH{1'd0} };      
-      end
-      else begin
-	 //送信側のみVIOへの格納処理を行う
-	 if( latency_data_en && !FPGA_RECEIVER_SIDE ) begin
-	    if( cq_sop ) begin //d1の前に入れておく（タイミングmetのため）//後で-1, /2する	    
-	       latency_result_b1 <= m_axis_cq_tdata[ RX_SIDE_WAITING_VALUE + 157:158] - m_axis_cq_tdata[ RX_SIDE_WAITING_VALUE + 127:128]; //受信側FPGAがパケットを送信側FPGAへechoする時の時間 - 受信側FPGAがパケットを受け取った時間
-	    end
-	    if( bram_reb ) begin
-	       latency_result_first <= ( latency_counter - latency_result_b1 ); //絶対時間 - 受信側FPGAでの待機時間
-	    end	
-            if( bram_reb_d1 ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
+         	counter_for_latency_store <= 14'd0;
+      	end
+     	else begin
+     		/*
+        	if( bram_reb_d1 ) begin //dataが来ていて，かつレイテンシ計測通信が止まっていない間
                 case( bram_rd_addr )
-                  13'd401  : latency_d0_in_vio <= latency_result_first - bram_rd_data;
-                  13'd1201 : latency_d1_in_vio <= latency_result_first - bram_rd_data;
-                  13'd2001 : latency_d2_in_vio <= latency_result_first - bram_rd_data;
-                  13'd2801 : latency_d3_in_vio <= latency_result_first - bram_rd_data;
-                  13'd3601 : latency_d4_in_vio <= latency_result_first - bram_rd_data;
-                  13'd4401 : latency_d5_in_vio <= latency_result_first - bram_rd_data;
-                  13'd5201 : latency_d6_in_vio <= latency_result_first - bram_rd_data;
-                  13'd6001 : latency_d7_in_vio <= latency_result_first - bram_rd_data;
-                  13'd6801 : latency_d8_in_vio <= latency_result_first - bram_rd_data;
-                  13'd7601 : latency_d9_in_vio <= latency_result_first - bram_rd_data;
+                  13'd401  : latency_d0_in_vio <= latency_counter - bram_rd_data;
+                  13'd1201 : latency_d1_in_vio <= latency_counter - bram_rd_data;
+                  13'd2001 : latency_d2_in_vio <= latency_counter - bram_rd_data;
+                  13'd2801 : latency_d3_in_vio <= latency_counter - bram_rd_data;
+                  13'd3601 : latency_d4_in_vio <= latency_counter - bram_rd_data;
+                  13'd4401 : latency_d5_in_vio <= latency_counter - bram_rd_data;
+                  13'd5201 : latency_d6_in_vio <= latency_counter - bram_rd_data;
+                  13'd6001 : latency_d7_in_vio <= latency_counter - bram_rd_data;
+                  13'd6801 : latency_d8_in_vio <= latency_counter - bram_rd_data;
+                  13'd7601 : latency_d9_in_vio <= latency_counter - bram_rd_data;
                 endcase // case ( bram_rd_addr )
             end // if ( bram_reb_d1 )
-	 end // if ( latency_data_en && !FPGA_RECEIVER_SIDE )	 
-      end // else: !if( latency_reset_signal )      
-   end // always @ ( posedge clk )
+            */
+            if( cq_sop ) begin
+            	case( counter_for_latency_store )
+            		14'd401 : latency_d0_in_vio <= latency_counter - m_axis_cq_tdata[167:128]; //受信時の絶対時刻 - 送信時の絶対時刻
+                  	14'd2001 : latency_d1_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                  	14'd3601 : latency_d2_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                  	14'd5201 : latency_d3_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                  	14'd6801 : latency_d4_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                  	14'd8601 : latency_d5_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                  	14'd10201 : latency_d6_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                  	14'd11801 : latency_d7_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                  	14'd13401 : latency_d8_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                  	14'd15001 : latency_d9_in_vio <= latency_counter - m_axis_cq_tdata[167:128];
+                endcase
+
+                if( &counter_for_latency_store ) begin
+                	counter_for_latency_store <= 14'd0;
+                end
+                else begin
+                	counter_for_latency_store <= counter_for_latency_store + 1'b1;
+                end
+            end
+	 	end // if ( latency_data_en && !FPGA_RECEIVER_SIDE )	 
+   	end // always @ ( posedge clk )
 
    
    //latencyデータを受け取り、結果をここに突っ込む
@@ -839,50 +834,6 @@ module BMD_RX_ENGINE (
       .probe_out0( latency_reset_signal ), //1bit
       .probe_out1( latency_data_en ) //1bit //これを立てたときにだけlatencyが測れる
       );
-
-
-   /***************************/
-   //Integrity guarantee
-   /***************************/
-   reg [9:0] incr_data; //送信されるデータの比較
-   reg cq_tlast_d1;
-   reg [10:0] total_DW_count_d1;
-
-   always @ ( posedge clk ) begin
-      if ( !rst_n ) begin
-	 guarantee_check   <= 1'b0;
-	 incr_data         <= 10'd0;
-	 cq_tlast_d1       <= 1'b0;
-	 total_DW_count_d1 <= 11'd0;
-      end
-      else if( latency_reset_signal ) begin
-	 guarantee_check   <= 1'b0;
-	 incr_data         <= 10'd0;
-	 cq_tlast_d1       <= 1'b0;
-	 total_DW_count_d1 <= 11'd0;
-      end
-      else begin
-	 //最後でcheck, カウントアップ
-	 if( fifo_write_en && cq_tlast_d1 && total_DW_count_d1 == packet_DW_setting ) begin
-	    //dataが送ったものと異なればassert // senderFPGAからの受信（receiverFPGA側）でのみ動作
-	    if( incr_data != fifo_write_data[9:0] ) begin
-	       guarantee_check <= 1'b1;
-	    end
-	    
-	    //送る予定のパケット数が送られてきたら次のdataが来ると考えcheckデータのincr
-	    if( incr_data == 10'd1023 ) begin
-	       incr_data       <= 10'd0;
-	    end
-	    else begin			     
-	       incr_data       <= incr_data + 1'b1;
-	    end
-	 end
-
-	 cq_tlast_d1           <= m_axis_cq_tlast;
-	 total_DW_count_d1     <= total_DW_count;
-      end
-   end
-
 
 
 
@@ -965,8 +916,7 @@ module BMD_RX_ENGINE (
       .probe4( m_axis_cq_tready ), //1bit
  //     .probe6( m_axis_cq_tkeep ), //8bit
  //     .probe7( m_axis_cq_tlast ), //1bit
-      .probe5( latency_result_first ), //40bit
-      .probe6( total_DW_count ) //11bit
+      .probe5( total_DW_count ) //11bit
       );
    
 endmodule // BMD_256_RX_ENGINE

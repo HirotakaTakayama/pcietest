@@ -121,10 +121,12 @@ module BMD_TX_ENGINE (
 		      input 					  cpld_receive_i, //it comes from rc always of 256_RX. request completed signal.
 		      input 					  calc_finished,
 
-		      //old FIFO.
+		      //ここだけレイテンシ計測用FIFO buffer
 		      input [255:0] 				  fifo_read_data,
-		      input 					  fifo_prog_empty,
+		      input 					  fifo_empty,
 		      output 					  fifo_read_en,
+
+
 		      input 					  fifo_read_valid, 
 		      input 					  fifo_prog_full,
 		      input 					  fifo_sender_data_prepare_ok, 
@@ -165,7 +167,9 @@ module BMD_TX_ENGINE (
 		      //debug signal
 		      input 					  m_axis_rc_tlast_i,
 		      input [255:0] 				  m_axis_rc_tdata_i,
-		      input 					  m_axis_rc_tvalid_i
+		      input 					  m_axis_rc_tvalid_i,
+
+              input cq_sop_d1
                       );
 
    //localparameter
@@ -532,7 +536,7 @@ module BMD_TX_ENGINE (
       end // if ( latency_reset_signal )
       
       else begin // if (!rst_n )
-	 if ( init_rst_i ) begin
+	       if ( init_rst_i ) begin
             s_axis_rq_tdata    <= 256'b0;
             s_axis_rq_tkeep    <= 8'b0;
             s_axis_rq_tlast    <= 1'b0;
@@ -573,27 +577,27 @@ module BMD_TX_ENGINE (
          bram_ena <= 1'b0;
 
 	 //LATENCY評価用.
-         if( vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //BRAMに書き続けてチェックするver
-   	    if( bram_wr_addr == BRAM_ADDRESS_MAX && mem_writing ) begin //一定数送信したら待機
-   	       bram_wr_addr       <= 13'd0;
-	       Tlp_stop_interrupt <= 1'b1;
-   	    end
-	    //送信側FPGA,受信側FPGA共に受信側待機時間カウントFIFOを持っており，送信側FPGAのFIFOにもこのデータがたまる．投げた分だけechoされるから，最終的にFIFOがfullになり，triggerが立つ．Tlp_stopを解除し，送信側FPGAが再び通信を開始する．
-	    if( fifo_counter_full && Tlp_stop_interrupt ) begin
-	       Tlp_stop_interrupt <= 1'b0;
-	    end   	    
-   	    bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移   	    
-   	 end // if ( vio_latency_count_continue && !FPGA_RECEIVER_SIDE )
+        if( vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //BRAMに書き続けてチェックするver
+   	        if( bram_wr_addr == BRAM_ADDRESS_MAX && mem_writing ) begin //一定数送信したら待機
+   	            bram_wr_addr       <= 13'd0;
+	           Tlp_stop_interrupt <= 1'b1;
+   	        end
+	       //送信側FPGA,受信側FPGA共に受信側待機時間カウントFIFOを持っており，送信側FPGAのFIFOにもこのデータがたまる．投げた分だけechoされるから，最終的にFIFOがfullになり，triggerが立つ．Tlp_stopを解除し，送信側FPGAが再び通信を開始する．
+	       if( fifo_counter_full && Tlp_stop_interrupt ) begin
+	           Tlp_stop_interrupt <= 1'b0;
+	       end   	    
+   	        bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移   	    
+   	    end // if ( vio_latency_count_continue && !FPGA_RECEIVER_SIDE )
 	 
-   	 if( !vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
-   	    if( bram_wr_addr == BRAM_ADDRESS_MAX && mem_writing ) begin
-   	       bram_wr_addr       <= BRAM_ADDRESS_MAX;
-   	       bram_wea           <= 1'b0;
-	       bram_ena           <= 1'b0;
-   	       Tlp_stop_interrupt <= 1'b1;
+   	    if( !vio_latency_count_continue && !FPGA_RECEIVER_SIDE ) begin //一度BRAMに書ききったらそれ以降書かないようにするver
+   	        if( bram_wr_addr == BRAM_ADDRESS_MAX && mem_writing ) begin
+   	            bram_wr_addr       <= BRAM_ADDRESS_MAX;
+   	            bram_wea           <= 1'b0;
+	           bram_ena           <= 1'b0;
+   	            Tlp_stop_interrupt <= 1'b1;
+   	        end
+   	        bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移   	    	    
    	    end
-   	    bram_wr_addr       <= bram_wr_addr + ( bram_wea && bram_ena ); //書き込みが始まったらアドレス遷移   	    	    
-   	 end
 
 	 
          if ( fifo_read_en ) begin
@@ -639,8 +643,10 @@ module BMD_TX_ENGINE (
 	    //receiver FPGAからのechoあり.
             if( s_axis_rq_tready[0] && 
 		( 
-		( ( test_sender_start_vio && !Tlp_stop_interrupt && !FPGA_RECEIVER_SIDE ) || ( test_sender_start_vio && !vio_echo_mode ) ) || //送信側FPGAの条件(左辺がレイテンシ測定用，右辺がスループット測定用)
-                  ( fifo_read_trigger && !fifo_counter_empty_wire && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //受信側FPGAの条件
+//		( ( test_sender_start_vio && !Tlp_stop_interrupt && !FPGA_RECEIVER_SIDE ) || ( test_sender_start_vio && !vio_echo_mode ) ) || //送信側FPGAの条件(左辺がレイテンシ測定用，右辺がスループット測定用)
+        ( ( test_sender_start_vio && !FPGA_RECEIVER_SIDE ) || ( test_sender_start_vio && !vio_echo_mode ) ) ||
+//                  ( fifo_read_trigger && !fifo_counter_empty_wire && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //受信側FPGAの条件
+        ( !fifo_empty && FPGA_RECEIVER_SIDE && vio_echo_mode ) ) ) begin //受信側FPGAの条件
 
                cur_wr_count       <= cur_wr_count + 1'b1;
 
@@ -718,7 +724,8 @@ module BMD_TX_ENGINE (
             //rq_tvalid && rq_treadyの時にデータを送る. treadyはIPが受け付けられる状態かを示す.当然IPからくる.
             if ( s_axis_rq_tready[0] ) begin
 	       //                s_axis_rq_tdata   <= fifo_read_data;
-               s_axis_rq_tdata   <= { 196'd0, waiting_counter[RX_SIDE_WAITING_VALUE - 1:0], fifo_counter_value_out[RX_SIDE_WAITING_VALUE - 1:0] }; //256bytes{  [パケットを送るときの時間] - [パケットを受け取った時の時間] }
+//               s_axis_rq_tdata   <= { 196'd0, waiting_counter[RX_SIDE_WAITING_VALUE - 1:0], fifo_counter_value_out[RX_SIDE_WAITING_VALUE - 1:0] }; //256bytes{  [パケットを送るときの時間] - [パケットを受け取った時の時間] }
+               s_axis_rq_tdata   <= { 216'd0, latency_counter }; //送信時の絶対時間
                s_axis_rq_tkeep   <= 8'hFF; //all of the data are enabled.
                cur_mwr_dw_count  <= cur_mwr_dw_count - 4'h8; //decrement 256bit(8DW)
 

@@ -755,7 +755,7 @@ module BMD_EP#
 			   .fifo_prog_full(fifo_prog_full),
 			   
 			   .fifo_read_data(fifo_read_data),
-			   .fifo_prog_empty(fifo_prog_empty),
+			   .fifo_empty(fifo_prog_empty),
 			   // for test
 			   //.pat_read_data(0),
 			   //.color_read_data(0),
@@ -792,7 +792,9 @@ module BMD_EP#
 			   //debug signal
 			   .m_axis_rc_tdata_i(m_axis_rc_tdata),
 			   .m_axis_rc_tlast_i(m_axis_rc_tlast),
-			   .m_axis_rc_tvalid_i(m_axis_rc_tvalid)
+			   .m_axis_rc_tvalid_i(m_axis_rc_tvalid),
+
+         .cq_sop_d1( cq_sop_out ) //I
 			   
 			   );
       
